@@ -9,7 +9,8 @@
     "dev:client": "vite client",
     "build": "vite build --config client/vite.config.js",
     "electron": "electron .",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\""
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\"",
+    "test": "vitest run --config client/vite.config.js"
   },
   "dependencies": {
     "better-sqlite3": "*",
@@ -20,8 +21,8 @@
   },
   "devDependencies": {
     "@tanstack/react-query": "*",
-    "@vitejs/plugin-react": "*",
     "@types/better-sqlite3": "*",
+    "@vitejs/plugin-react": "*",
     "autoprefixer": "*",
     "concurrently": "*",
     "electron": "*",
@@ -32,6 +33,7 @@
     "recharts": "*",
     "tailwindcss": "^3",
     "vite": "*",
+    "vitest": "^4.1.8",
     "wait-on": "*"
   }
 }

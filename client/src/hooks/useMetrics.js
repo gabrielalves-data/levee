@@ -1,6 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../api'
 
+export function useUpcomingResets() {
+  return useQuery({
+    queryKey: ['metrics', 'resets'],
+    queryFn: () => apiFetch('/api/metrics/resets'),
+    staleTime: 5 * 60_000,
+  })
+}
+
 export function useMetrics(serviceId) {
   return useQuery({
     queryKey: ['metrics', serviceId],

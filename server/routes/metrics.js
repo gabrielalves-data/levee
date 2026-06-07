@@ -5,6 +5,27 @@ const db = require('../db/database');
 
 const router = Router();
 
+// GET /api/metrics/resets — active services with a date metric resetting within 7 days
+router.get('/resets', (req, res) => {
+  const rows = db.prepare(`
+    WITH date_metrics AS (
+      SELECT s.id AS service_id, s.name AS service_name, s.category,
+             m.label, m.metric_key, m.value_text AS reset_date
+      FROM   service_metrics m
+      JOIN   services s ON s.id = m.service_id
+      WHERE  s.active = 1
+        AND  m.value_type = 'date'
+        AND  m.value_text IS NOT NULL
+    )
+    SELECT service_id, service_name, category, label, metric_key, reset_date
+    FROM   date_metrics
+    WHERE  date(reset_date) >= date('now')
+      AND  date(reset_date) <= date('now', '+7 days')
+    ORDER  BY date(reset_date)
+  `).all();
+  res.json(rows);
+});
+
 // GET /api/metrics/:serviceId — all metrics for a service
 router.get('/:serviceId', (req, res) => {
   const rows = db.prepare(`
