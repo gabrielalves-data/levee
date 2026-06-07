@@ -1,0 +1,38 @@
+{
+  "_note": "Prices are user-verifiable estimates of publicly listed plan prices (USD) as of 2026-06; confirm against each provider's pricing page before relying on them.",
+  "claude": {
+    "label": "Claude",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Max5x": { "label": "Max 5x", "price": 100, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Max20x": { "label": "Max 20x", "price": 200, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "chatgpt": {
+    "label": "ChatGPT",
+    "plans": {
+      "Plus": { "label": "Plus", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Pro": { "label": "Pro", "price": 200, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "gemini": {
+    "label": "Gemini",
+    "plans": {
+      "AIPro": { "label": "AI Pro", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "cursor": {
+    "label": "Cursor",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Business": { "label": "Business", "price": 40, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "copilot": {
+    "label": "GitHub Copilot",
+    "plans": {
+      "Individual": { "label": "Individual", "price": 10, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Pro": { "label": "Pro", "price": 19, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  }
+}

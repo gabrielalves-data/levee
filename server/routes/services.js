@@ -16,7 +16,8 @@ router.get('/', (req, res) => {
   const all = req.query.all === '1';
   const rows = db.prepare(`
     SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
-           billing_day, icon, is_seed, active, created_at
+           billing_day, icon, is_seed, active, connector_type, plan_key,
+           last_sync_at, sync_status, sync_error, created_at
     FROM   services
     WHERE  (? = 1 OR active = 1)
     ORDER  BY category, name
@@ -29,12 +30,14 @@ router.get('/:id', (req, res) => {
   const row = db.prepare(`
     WITH svc AS (
       SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
-             billing_day, icon, is_seed, active, created_at
+             billing_day, icon, is_seed, active, connector_type, plan_key,
+             last_sync_at, sync_status, sync_error, created_at
       FROM   services
       WHERE  id = ?
     )
     SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
-           billing_day, icon, is_seed, active, created_at
+           billing_day, icon, is_seed, active, connector_type, plan_key,
+           last_sync_at, sync_status, sync_error, created_at
     FROM   svc
   `).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });

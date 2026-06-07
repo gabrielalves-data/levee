@@ -12,6 +12,20 @@ CREATE TABLE IF NOT EXISTS services (
   icon         TEXT,
   is_seed      INTEGER NOT NULL DEFAULT 0,
   active       INTEGER NOT NULL DEFAULT 1,
+  connector_type TEXT  NOT NULL DEFAULT 'manual' CHECK (connector_type IN ('manual','catalog','api')),
+  plan_key     TEXT,
+  last_sync_at TEXT,
+  sync_status  TEXT,
+  sync_error   TEXT,
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS service_connectors (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  service_id   INTEGER NOT NULL UNIQUE REFERENCES services(id) ON DELETE CASCADE,
+  provider_key TEXT    NOT NULL,
+  enabled      INTEGER NOT NULL DEFAULT 0,
+  config       TEXT,
   created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -54,3 +68,5 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 CREATE INDEX IF NOT EXISTS idx_metrics_service ON service_metrics(service_id);
 CREATE INDEX IF NOT EXISTS idx_services_active  ON services(active);
+
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('allow_outbound', 'false');

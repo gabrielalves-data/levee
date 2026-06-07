@@ -26,6 +26,23 @@ db.pragma('foreign_keys = ON');
 
 db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
+// Idempotent migration: add connector columns to pre-existing `services` tables.
+// schema.sql's CREATE TABLE IF NOT EXISTS only covers fresh DBs, so ALTER any
+// column that is missing on an already-created table.
+const serviceColumns = new Set(
+  db.prepare('PRAGMA table_info(services)').all().map((c) => c.name)
+);
+const serviceMigrations = [
+  ["connector_type", "ALTER TABLE services ADD COLUMN connector_type TEXT NOT NULL DEFAULT 'manual' CHECK (connector_type IN ('manual','catalog','api'))"],
+  ['plan_key',     'ALTER TABLE services ADD COLUMN plan_key TEXT'],
+  ['last_sync_at', 'ALTER TABLE services ADD COLUMN last_sync_at TEXT'],
+  ['sync_status',  'ALTER TABLE services ADD COLUMN sync_status TEXT'],
+  ['sync_error',   'ALTER TABLE services ADD COLUMN sync_error TEXT'],
+];
+for (const [col, sql] of serviceMigrations) {
+  if (!serviceColumns.has(col)) db.exec(sql);
+}
+
 const { n } = db.prepare('SELECT COUNT(*) AS n FROM services').get();
 if (n === 0) {
   db.exec(fs.readFileSync(path.join(__dirname, 'seed.sql'), 'utf8'));

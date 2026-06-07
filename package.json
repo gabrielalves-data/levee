@@ -10,7 +10,8 @@
     "build": "vite build --config client/vite.config.js",
     "electron": "electron .",
     "dev": "concurrently \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\"",
-    "test": "vitest run --config client/vite.config.js"
+    "test": "vitest run --config client/vite.config.js",
+    "test:connectors": "node --test server/connectors/connectors.test.js"
   },
   "dependencies": {
     "better-sqlite3-multiple-ciphers": "^12.10.0",

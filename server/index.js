@@ -10,7 +10,12 @@ const snapshotsRouter   = require('./routes/snapshots');
 const settingsRouter    = require('./routes/settings');
 const backupRouter      = require('./routes/backup');
 const encryptionRouter  = require('./routes/encryption');
+const catalogRouter     = require('./routes/catalog');
+const connectorsRouter  = require('./routes/connectors');
 const { startCrons } = require('./cron/snapshot');
+
+// Load all connectors so they self-register on startup.
+require('./connectors/registry');
 
 const PORT = process.env.PORT || 3001;
 const HOST = '127.0.0.1';
@@ -28,6 +33,8 @@ app.use('/api/snapshots',   snapshotsRouter);
 app.use('/api/settings',    settingsRouter);
 app.use('/api/backup',      backupRouter);
 app.use('/api/encryption',  encryptionRouter);
+app.use('/api/catalog',     catalogRouter);
+app.use('/api/connectors',  connectorsRouter);
 
 app.listen(PORT, HOST, () => {
   console.log(`[devcost] listening on ${HOST}:${PORT}`);

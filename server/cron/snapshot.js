@@ -3,6 +3,7 @@
 const cron = require('node-cron');
 const db = require('../db/database');
 const { startAlertCron } = require('./refreshAlerts');
+const { syncService } = require('../connectors/sync');
 
 function takeSnapshot(year, month) {
   const rows = db.prepare(`
@@ -30,6 +31,29 @@ function takeSnapshot(year, month) {
   `).run(year, month, total, JSON.stringify(rows));
 }
 
+async function syncEnabledConnectors() {
+  const setting = db.prepare(
+    `SELECT value FROM app_settings WHERE key = 'allow_outbound'`
+  ).get();
+  if (setting?.value !== 'true') return;
+
+  const rows = db.prepare(`
+    WITH enabled_api AS (
+      SELECT sc.service_id
+      FROM   service_connectors sc
+      JOIN   services s ON s.id = sc.service_id
+      WHERE  sc.enabled = 1
+        AND  s.connector_type = 'api'
+        AND  s.active = 1
+    )
+    SELECT service_id FROM enabled_api
+  `).all();
+
+  for (const { service_id } of rows) {
+    await syncService(service_id);
+  }
+}
+
 function startCrons() {
   // Snapshot previous month on the 1st at midnight
   cron.schedule('0 0 1 * *', () => {
@@ -38,7 +62,14 @@ function startCrons() {
     takeSnapshot(prev.getFullYear(), prev.getMonth() + 1);
   });
 
+  // Sync enabled API connectors every 6 hours (only when allow_outbound=true)
+  cron.schedule('0 */6 * * *', () => {
+    syncEnabledConnectors().catch(err => {
+      console.error('[devcost] connector sync error:', err.message);
+    });
+  });
+
   startAlertCron();
 }
 
-module.exports = { startCrons, takeSnapshot };
+module.exports = { startCrons, takeSnapshot, syncEnabledConnectors };

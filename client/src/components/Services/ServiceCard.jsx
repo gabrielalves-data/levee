@@ -2,6 +2,8 @@ import * as Icons from 'lucide-react'
 import { useState } from 'react'
 import { useMetrics, useUpsertMetric } from '../../hooks/useMetrics'
 import { useSnapshots } from '../../hooks/useSnapshots'
+import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
+import { useAllowOutbound, useConnectorProviders, useUpsertConnector, useSyncConnector } from '../../hooks/useConnectors'
 
 const CATEGORY_STYLES = {
   cloud:    'bg-blue-500/20 text-blue-300',
@@ -25,7 +27,7 @@ function formatValue(metric) {
   switch (value_type) {
     case 'currency': return `$${value_num.toFixed(2)}`
     case 'percent':  return `${value_num.toFixed(1)}%`
-    case 'number':   return `${value_num.toLocaleString()}${unit ? ' ' + unit : ''}`
+    case 'number':   return `${value_num.toLocaleString()}${unit ? ' ' + unit : ''}`
     case 'date':     return value_text ?? new Date(value_num * 1000).toLocaleDateString()
     default:         return value_text ?? String(value_num)
   }
@@ -41,7 +43,7 @@ function UsageBar({ ratio }) {
   )
 }
 
-function MetricRow({ metric, service, prevBill }) {
+function MetricRow({ metric, service, prevBill, readOnly }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const upsert = useUpsertMetric(service.id)
@@ -112,13 +114,15 @@ function MetricRow({ metric, service, prevBill }) {
               {formatValue(metric)}
             </span>
           )}
-          <button
-            onClick={editing ? () => setEditing(false) : startEdit}
-            className="ml-0.5 text-slate-600 hover:text-slate-400 transition-colors"
-            title={editing ? 'Cancel' : 'Update value'}
-          >
-            {editing ? <Icons.X size={11} /> : <Icons.Pencil size={11} />}
-          </button>
+          {!readOnly && (
+            <button
+              onClick={editing ? () => setEditing(false) : startEdit}
+              className="ml-0.5 text-slate-600 hover:text-slate-400 transition-colors"
+              title={editing ? 'Cancel' : 'Update value'}
+            >
+              {editing ? <Icons.X size={11} /> : <Icons.Pencil size={11} />}
+            </button>
+          )}
         </div>
       </div>
 
@@ -170,13 +174,267 @@ function MetricRow({ metric, service, prevBill }) {
   )
 }
 
+// ─── Connect panels ───────────────────────────────────────────────────────────
+
+const SELECT_CLS = 'w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500'
+const BTN_PRIMARY = 'w-full px-2 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg transition-colors'
+
+function CatalogPanel({ service, onClose }) {
+  const { data: catalog = {}, isLoading } = useCatalog()
+  const apply = useApplyCatalogPlan()
+  const [providerKey, setProviderKey] = useState('')
+  const [planKey, setPlanKey] = useState('')
+
+  const providers = Object.entries(catalog).filter(([k]) => k !== '_note')
+  const plans = providerKey && catalog[providerKey]?.plans
+    ? Object.entries(catalog[providerKey].plans)
+    : []
+
+  async function handleApply() {
+    if (!providerKey || !planKey) return
+    await apply.mutateAsync({ serviceId: service.id, providerKey, planKey })
+    onClose()
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {isLoading ? (
+        <p className="text-xs text-slate-500">Loading catalog…</p>
+      ) : (
+        <>
+          <select value={providerKey} onChange={e => { setProviderKey(e.target.value); setPlanKey('') }} className={SELECT_CLS}>
+            <option value="">Select provider…</option>
+            {providers.map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+
+          {plans.length > 0 && (
+            <select value={planKey} onChange={e => setPlanKey(e.target.value)} className={SELECT_CLS}>
+              <option value="">Select plan…</option>
+              {plans.map(([k, v]) => (
+                <option key={k} value={k}>{v.label} — ${v.price}/{v.billing_cycle}</option>
+              ))}
+            </select>
+          )}
+
+          {apply.isError && <p className="text-xs text-red-400">Failed to apply plan</p>}
+
+          <button
+            onClick={handleApply}
+            disabled={!providerKey || !planKey || apply.isPending}
+            className={BTN_PRIMARY}
+          >
+            {apply.isPending ? 'Applying…' : 'Apply Plan'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ApiPanel({ service }) {
+  const { data: providers = [], isLoading } = useConnectorProviders()
+  const upsert = useUpsertConnector()
+  const sync = useSyncConnector()
+  const { allowed } = useAllowOutbound()
+  const [providerKey, setProviderKey] = useState('')
+  const [token, setToken] = useState('')
+  const [error, setError] = useState('')
+
+  const isApiConnected = service.connector_type === 'api'
+
+  async function handleSave() {
+    if (!providerKey || !token) return
+    setError('')
+    try {
+      await upsert.mutateAsync({ serviceId: service.id, providerKey, secret: token })
+      setToken('')
+    } catch {
+      setError('Failed to save connector')
+    }
+  }
+
+  async function handleSync() {
+    setError('')
+    try {
+      await sync.mutateAsync(service.id)
+    } catch {
+      setError('Sync failed')
+    }
+  }
+
+  if (!isApiConnected) {
+    return (
+      <div className="space-y-1.5">
+        {isLoading ? (
+          <p className="text-xs text-slate-500">Loading…</p>
+        ) : (
+          <>
+            <select value={providerKey} onChange={e => setProviderKey(e.target.value)} className={SELECT_CLS}>
+              <option value="">Select provider…</option>
+              {providers.map(p => (
+                <option key={p.provider_key} value={p.provider_key}>{p.label}</option>
+              ))}
+            </select>
+            <input
+              type="password"
+              placeholder="API token"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <button
+              onClick={handleSave}
+              disabled={!providerKey || !token || upsert.isPending}
+              className={BTN_PRIMARY}
+            >
+              {upsert.isPending ? 'Saving…' : 'Save & Connect'}
+            </button>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <div>
+        {service.last_sync_at ? (
+          <p className="text-xs text-slate-500">
+            Last sync: {new Date(service.last_sync_at).toLocaleString()}
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500">Never synced</p>
+        )}
+        {service.sync_status === 'error' && service.sync_error && (
+          <p className="text-xs text-red-400 truncate" title={service.sync_error}>
+            {service.sync_error}
+          </p>
+        )}
+        {service.sync_status === 'ok' && (
+          <p className="text-xs text-emerald-400">Synced OK</p>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <button
+          onClick={handleSync}
+          disabled={!allowed || sync.isPending}
+          title={!allowed ? 'Enable outbound connections in Settings to sync' : undefined}
+          className="flex items-center gap-1.5 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white rounded-lg transition-colors"
+        >
+          <Icons.RefreshCw size={11} className={sync.isPending ? 'animate-spin' : ''} />
+          {sync.isPending ? 'Syncing…' : 'Sync now'}
+        </button>
+        {!allowed && (
+          <p className="text-xs text-amber-500">Enable outbound connections in Settings to sync</p>
+        )}
+        {error && <p className="text-xs text-red-400">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
+function ConnectSection({ service, onEnterManually, showManual }) {
+  const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState('catalog')
+
+  const isAutoConnected = service.connector_type !== 'manual'
+
+  return (
+    <div className="border-t border-slate-700/60 pt-2.5 space-y-2">
+      {/* Status row or Connect button */}
+      {isAutoConnected && !open && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              service.sync_status === 'error' ? 'bg-red-400' : 'bg-emerald-400'
+            }`} />
+            <span className="text-xs text-slate-400">
+              {service.connector_type === 'catalog'
+                ? `Catalog: ${service.plan_key ?? ''}`
+                : 'API connected'}
+            </span>
+          </div>
+          <button
+            onClick={() => setOpen(true)}
+            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            Change
+          </button>
+        </div>
+      )}
+
+      {!isAutoConnected && !open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+        >
+          <Icons.Plug size={11} /> Connect
+        </button>
+      )}
+
+      {/* Expanded panel */}
+      {open && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1">
+              {['catalog', 'api'].map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                    tab === t
+                      ? 'bg-slate-700 text-white'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {t === 'catalog' ? 'Catalog' : 'API'}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="text-slate-600 hover:text-slate-400 transition-colors"
+            >
+              <Icons.X size={11} />
+            </button>
+          </div>
+
+          {tab === 'catalog'
+            ? <CatalogPanel service={service} onClose={() => setOpen(false)} />
+            : <ApiPanel service={service} />
+          }
+        </div>
+      )}
+
+      {/* Enter manually link — only when connector is active and manual edit not yet shown */}
+      {isAutoConnected && !showManual && (
+        <button
+          onClick={onEnterManually}
+          className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+        >
+          Enter manually →
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── ServiceCard ──────────────────────────────────────────────────────────────
+
 export default function ServiceCard({ service }) {
   const { data: metrics = [], isLoading } = useMetrics(service.id)
   const { data: snapshots = [] } = useSnapshots(2)
+  const [showManual, setShowManual] = useState(false)
 
-  // Most-recent snapshot is last (oldest-first ordering from the route)
   const lastSnapshot = snapshots[snapshots.length - 1]
   const prevBill = lastSnapshot?.breakdown?.find(r => r.id === service.id)?.monthly_bill ?? null
+
+  const isAutoConnected = service.connector_type !== 'manual'
+  const metricsReadOnly = isAutoConnected && !showManual
 
   const IconComponent = (service.icon && Icons[service.icon]) || Icons.Package
   const categoryStyle = CATEGORY_STYLES[service.category] ?? CATEGORY_STYLES.custom
@@ -209,12 +467,19 @@ export default function ServiceCard({ service }) {
               metric={m}
               service={service}
               prevBill={m.metric_key === 'monthly_bill' ? prevBill : null}
+              readOnly={metricsReadOnly}
             />
           ))}
         </div>
       ) : (
         <p className="text-xs text-slate-600 border-t border-slate-700/60 pt-3">No metrics configured</p>
       )}
+
+      <ConnectSection
+        service={service}
+        showManual={showManual}
+        onEnterManually={() => setShowManual(true)}
+      />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useServices, useCreateService, usePatchService, useArchiveService } from '../hooks/useServices'
 import { apiFetch } from '../api'
 import WidgetConfig from '../components/Widget'
+import AllowOutboundToggle from '../components/Settings'
 
 const CATEGORIES = [
   { value: 'cloud',    label: 'Cloud' },
@@ -489,6 +490,11 @@ export default function Settings() {
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-slate-300">Data Management</h3>
         <DataManagement />
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-300">Connections</h3>
+        <AllowOutboundToggle />
       </section>
 
       <section className="space-y-3">
