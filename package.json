@@ -13,11 +13,12 @@
     "test": "vitest run --config client/vite.config.js"
   },
   "dependencies": {
-    "better-sqlite3": "*",
+    "better-sqlite3-multiple-ciphers": "^12.10.0",
     "express": "*",
     "helmet": "*",
     "keytar": "*",
-    "node-cron": "*"
+    "node-cron": "*",
+    "node-notifier": "^10.0.1"
   },
   "devDependencies": {
     "@tanstack/react-query": "*",

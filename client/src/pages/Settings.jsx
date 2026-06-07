@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Trash2, ToggleLeft, ToggleRight, Download, Upload, Lock, Unlock } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useServices, useCreateService, usePatchService, useArchiveService } from '../hooks/useServices'
 import { apiFetch } from '../api'
@@ -260,6 +260,122 @@ function ServiceRow({ service }) {
   )
 }
 
+function DataManagement() {
+  const [importStatus, setImportStatus] = useState(null)
+  const fileRef = useRef(null)
+  const qc = useQueryClient()
+
+  async function handleExport() {
+    const data = await apiFetch('/api/backup/export')
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url  = URL.createObjectURL(blob)
+    const a    = Object.assign(document.createElement('a'), {
+      href:     url,
+      download: `devcost-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    })
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportStatus(null)
+    try {
+      const text    = await file.text()
+      const payload = JSON.parse(text)
+      const result  = await apiFetch('/api/backup/import', {
+        method: 'POST',
+        body:   JSON.stringify(payload),
+      })
+      setImportStatus({ ok: true, msg: `Imported: ${result.imported.services} services, ${result.imported.metrics} metrics` })
+      qc.invalidateQueries()
+    } catch (err) {
+      setImportStatus({ ok: false, msg: err.message })
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+          <Download size={13} /> Export backup
+        </button>
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+          <Upload size={13} /> Import backup
+        </button>
+        <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+      </div>
+      {importStatus && (
+        <p className={`text-xs ${importStatus.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+          {importStatus.msg}
+        </p>
+      )}
+      <p className="text-xs text-slate-500">
+        Export includes all services, metrics, widget slots, and snapshots. Secrets are never exported.
+      </p>
+    </div>
+  )
+}
+
+function EncryptionToggle() {
+  const [encrypted, setEncrypted] = useState(false)
+  const [busy, setBusy]           = useState(false)
+  const [error, setError]         = useState('')
+
+  useEffect(() => {
+    apiFetch('/api/encryption/status')
+      .then(d => setEncrypted(d.encrypted))
+      .catch(() => {})
+  }, [])
+
+  async function toggle() {
+    setBusy(true)
+    setError('')
+    try {
+      const result = await apiFetch('/api/encryption/toggle', {
+        method: 'POST',
+        body:   JSON.stringify({ enable: !encrypted }),
+      })
+      setEncrypted(result.encrypted)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between bg-slate-800/60 rounded-lg px-3 py-2.5 border border-slate-700/50">
+        <div>
+          <p className="text-sm text-white flex items-center gap-1.5">
+            {encrypted ? <Lock size={14} className="text-amber-400" /> : <Unlock size={14} className="text-slate-500" />}
+            Database Encryption
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {encrypted ? 'At-rest encryption enabled — passphrase stored in OS keychain' : 'Database stored unencrypted'}
+          </p>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={busy}
+          className={`transition-colors disabled:opacity-50 ${encrypted ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-600 hover:text-slate-400'}`}
+          title={encrypted ? 'Disable encryption' : 'Enable encryption'}>
+          {encrypted ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  )
+}
+
 function LaunchAtLoginToggle() {
   const [enabled, setEnabled] = useState(false)
 
@@ -331,6 +447,16 @@ export default function Settings() {
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-slate-300">App</h3>
         <LaunchAtLoginToggle />
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-300">Data Management</h3>
+        <DataManagement />
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-300">Security</h3>
+        <EncryptionToggle />
       </section>
     </div>
   )

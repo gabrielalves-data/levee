@@ -10,6 +10,9 @@ const fs     = require('fs');
 const { fork } = require('child_process');
 const { createOverlay, getOverlay } = require('./overlay');
 
+let keytar;
+try { keytar = require('keytar'); } catch { keytar = null; }
+
 const PORT         = 3001;
 const LAUNCH_TOKEN = crypto.randomBytes(32).toString('hex');
 
@@ -31,9 +34,23 @@ function createTrayIcon() {
   return nativeImage.createFromBuffer(data, { width: size, height: size });
 }
 
-function startServer() {
+async function startServer() {
+  const cfgPath = path.join(app.getPath('home'), '.devcost', 'config.json');
+  let dbKey = '';
+  try {
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    if (cfg.dbEncrypted && keytar) {
+      dbKey = (await keytar.getPassword('devcost', 'db-encryption-key')) ?? '';
+    }
+  } catch { /* config absent or unreadable — open unencrypted */ }
+
   serverProcess = fork(path.join(__dirname, '..', 'server', 'index.js'), [], {
-    env: { ...process.env, PORT: String(PORT), DEVCOST_TOKEN: LAUNCH_TOKEN },
+    env: {
+      ...process.env,
+      PORT:           String(PORT),
+      DEVCOST_TOKEN:  LAUNCH_TOKEN,
+      DEVCOST_DB_KEY: dbKey,
+    },
     silent: false,
   });
 }
@@ -100,11 +117,11 @@ function boundsPath() {
   return path.join(app.getPath('home'), '.devcost', 'overlay-bounds.json');
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Enable launch-at-login by default on first run.
   app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
-  startServer();
+  await startServer();
   createMainWindow();
   setupTray();
 

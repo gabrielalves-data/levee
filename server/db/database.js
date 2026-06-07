@@ -1,6 +1,6 @@
 'use strict';
 
-const Database = require('better-sqlite3');
+const Database = require('better-sqlite3-multiple-ciphers');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -16,6 +16,10 @@ const prevMask = process.umask(0o077);
 const db = new Database(DB_PATH);
 process.umask(prevMask);
 fs.chmodSync(DB_PATH, 0o600);
+
+if (process.env.DEVCOST_DB_KEY) {
+  db.pragma(`key="${process.env.DEVCOST_DB_KEY}"`);
+}
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
