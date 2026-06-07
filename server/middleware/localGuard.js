@@ -6,7 +6,9 @@ const crypto = require('crypto');
 // Electron main can pre-set DEVCOST_TOKEN so it knows the value before spawning.
 const LAUNCH_TOKEN = process.env.DEVCOST_TOKEN || crypto.randomBytes(32).toString('hex');
 
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
+const LOOPBACK      = new Set(['127.0.0.1', 'localhost', '::1']);
+// Allowed origins: loopback-only, any port (covers Vite :5173 in dev and file:// in Electron)
+const ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 
 function localGuard(req, res, next) {
   const host = (req.headers['host'] || '').split(':')[0];
@@ -15,10 +17,12 @@ function localGuard(req, res, next) {
     return res.status(403).json({ error: 'Forbidden: non-loopback host' });
   }
 
-  // Reject ALL Origin headers. Browsers set this on cross-origin requests;
-  // non-browser callers (Electron preload via node http, curl) do not.
-  if (req.headers['origin']) {
-    return res.status(403).json({ error: 'Forbidden: origin header present' });
+  // Allow omitted Origin (curl, Electron file://, same-origin GET) and
+  // loopback Origins (http://127.0.0.1[:port], http://localhost[:port]).
+  // Reject anything else — DNS-rebinding defence.
+  const origin = req.headers['origin'];
+  if (origin && !ORIGIN_RE.test(origin)) {
+    return res.status(403).json({ error: 'Forbidden: untrusted origin' });
   }
 
   if (req.headers['x-devcost-token'] !== LAUNCH_TOKEN) {
