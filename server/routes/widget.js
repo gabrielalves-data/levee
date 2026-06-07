@@ -5,28 +5,59 @@ const db = require('../db/database');
 
 const router = Router();
 
-// Summary payload for the always-on-top overlay widget
+// GET /api/widget — all slots with joined service + metric data
 router.get('/', (req, res) => {
-  const period = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-
-  const byCategory = db.prepare(`
-    WITH monthly AS (
+  const rows = db.prepare(`
+    WITH slot_data AS (
       SELECT
-        s.category,
-        SUM(m.cost_usd) AS total_usd
-      FROM   metrics  m
-      JOIN   services s ON s.id = m.service_id
-      WHERE  m.period = ?
-      GROUP  BY s.category
+        ws.id,
+        ws.slot_index,
+        ws.service_id,
+        ws.metric_key,
+        ws.label_override,
+        ws.updated_at,
+        s.name        AS service_name,
+        sm.label      AS metric_label,
+        sm.value_type,
+        sm.value_num,
+        sm.value_text,
+        sm.unit
+      FROM      widget_slots    ws
+      LEFT JOIN services        s  ON s.id  = ws.service_id
+      LEFT JOIN service_metrics sm ON sm.service_id = ws.service_id
+                                   AND sm.metric_key = ws.metric_key
     )
-    SELECT category, total_usd
-    FROM   monthly
-    ORDER  BY total_usd DESC
-  `).all(period);
+    SELECT id, slot_index, service_id, metric_key, label_override, updated_at,
+           service_name, metric_label, value_type, value_num, value_text, unit
+    FROM   slot_data
+    ORDER  BY slot_index
+  `).all();
+  res.json(rows);
+});
 
-  const total = byCategory.reduce((acc, r) => acc + r.total_usd, 0);
+// PUT /api/widget/:slotIndex — assign or update a slot
+router.put('/:slotIndex', (req, res) => {
+  const { service_id, metric_key, label_override } = req.body;
+  db.prepare(`
+    INSERT INTO widget_slots (slot_index, service_id, metric_key, label_override, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT (slot_index) DO UPDATE SET
+      service_id     = excluded.service_id,
+      metric_key     = excluded.metric_key,
+      label_override = excluded.label_override,
+      updated_at     = datetime('now')
+  `).run(req.params.slotIndex, service_id ?? null, metric_key ?? null, label_override ?? null);
+  res.json({ ok: true });
+});
 
-  res.json({ period, total_usd: total, by_category: byCategory });
+// DELETE /api/widget/:slotIndex — clear a slot (nulls service/metric, keeps the row)
+router.delete('/:slotIndex', (req, res) => {
+  db.prepare(`
+    UPDATE widget_slots
+    SET service_id = NULL, metric_key = NULL, label_override = NULL, updated_at = datetime('now')
+    WHERE slot_index = ?
+  `).run(req.params.slotIndex);
+  res.json({ ok: true });
 });
 
 module.exports = router;

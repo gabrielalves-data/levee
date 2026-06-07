@@ -4,29 +4,30 @@ const cron = require('node-cron');
 const db = require('../db/database');
 const { startAlertCron } = require('./refreshAlerts');
 
-function takeSnapshot(period) {
-  const breakdown = db.prepare(`
-    WITH cost_by_service AS (
+function takeSnapshot(year, month) {
+  const rows = db.prepare(`
+    WITH active_bills AS (
       SELECT
         s.id,
         s.name,
         s.category,
-        SUM(m.cost_usd) AS total_usd
-      FROM   metrics  m
-      JOIN   services s ON s.id = m.service_id
-      WHERE  m.period = ?
-      GROUP  BY s.id, s.name, s.category
+        sm.value_num AS monthly_bill
+      FROM   services        s
+      LEFT JOIN service_metrics sm ON sm.service_id = s.id
+                                   AND sm.metric_key = 'monthly_bill'
+      WHERE  s.active = 1
+        AND  sm.value_num IS NOT NULL
     )
-    SELECT id, name, category, total_usd
-    FROM   cost_by_service
-  `).all(period);
+    SELECT id, name, category, monthly_bill
+    FROM   active_bills
+  `).all();
 
-  const total = breakdown.reduce((acc, r) => acc + r.total_usd, 0);
+  const total = rows.reduce((acc, r) => acc + r.monthly_bill, 0);
 
   db.prepare(`
-    INSERT OR REPLACE INTO snapshots (period, total_usd, payload)
-    VALUES (?, ?, ?)
-  `).run(period, total, JSON.stringify(breakdown));
+    INSERT OR REPLACE INTO monthly_snapshots (year, month, total_spend, breakdown, captured_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `).run(year, month, total, JSON.stringify(rows));
 }
 
 function startCrons() {
@@ -34,7 +35,7 @@ function startCrons() {
   cron.schedule('0 0 1 * *', () => {
     const prev = new Date();
     prev.setMonth(prev.getMonth() - 1);
-    takeSnapshot(prev.toISOString().slice(0, 7));
+    takeSnapshot(prev.getFullYear(), prev.getMonth() + 1);
   });
 
   startAlertCron();

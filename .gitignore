@@ -67,3 +67,6 @@ coverage/
 # Misc
 *.tsbuildinfo
 .cache/
+
+# Notes
+notes.txt

@@ -1,5 +1,129 @@
--- Example services. Remove or extend before production use.
-INSERT OR IGNORE INTO services (id, name, category, provider, billing_url, active) VALUES
-  (1, 'AWS',        'cloud',    'Amazon',    'https://console.aws.amazon.com/billing/', 1),
-  (2, 'Claude API', 'ai_api',   'Anthropic', 'https://console.anthropic.com/',          1),
-  (3, 'GitHub',     'dev_tool', 'GitHub',    'https://github.com/settings/billing',     1);
+-- Catalog seed — is_seed=1 marks these as editable/archivable, never re-seeded.
+
+-- Cloud
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
+  (1,  'AWS',         'Amazon',      'cloud', 'usage',  1),
+  (2,  'GCP',         'Google',      'cloud', 'usage',  1),
+  (3,  'Azure',       'Microsoft',   'cloud', 'usage',  1),
+  (4,  'Vercel',      'Vercel',      'cloud', 'hybrid', 1),
+  (5,  'Railway',     'Railway',     'cloud', 'usage',  1),
+  (6,  'Cloudflare',  'Cloudflare',  'cloud', 'hybrid', 1),
+  (7,  'PlanetScale', 'PlanetScale', 'cloud', 'usage',  1);
+
+-- AI Models (subscription plans)
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
+  (8,  'Claude',  'Anthropic', 'ai_model', 'flat', 1),
+  (9,  'ChatGPT', 'OpenAI',    'ai_model', 'flat', 1),
+  (10, 'Gemini',  'Google',    'ai_model', 'flat', 1);
+
+-- AI APIs (usage-based)
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
+  (11, 'Anthropic API', 'Anthropic', 'ai_api', 'usage', 1),
+  (12, 'OpenAI API',    'OpenAI',    'ai_api', 'usage', 1),
+  (13, 'Groq',          'Groq',      'ai_api', 'usage', 1),
+  (14, 'Mistral',       'Mistral',   'ai_api', 'usage', 1);
+
+-- Dev Tools
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
+  (15, 'GitHub Copilot', 'GitHub',    'tool', 'flat',   1),
+  (16, 'Cursor',         'Anysphere', 'tool', 'flat',   1),
+  (17, 'Linear',         'Linear',    'tool', 'flat',   1),
+  (18, 'Sentry',         'Sentry',    'tool', 'hybrid', 1);
+
+-- Representative metrics per service (values left NULL — filled by user)
+
+-- Claude (id=8): Pro plan
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (8, 'monthly_bill',   'Monthly bill',      'currency'),
+  (8, 'current_usage',  'Usage this period', 'percent'),
+  (8, 'weekly_usage',   'Weekly usage',      'percent'),
+  (8, 'limit',          'Monthly limit',     'currency'),
+  (8, 'reset_date',     'Next reset',        'date');
+
+-- ChatGPT (id=9)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (9, 'monthly_bill', 'Monthly bill', 'currency'),
+  (9, 'reset_date',   'Next reset',   'date');
+
+-- Gemini (id=10)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (10, 'monthly_bill', 'Monthly bill', 'currency'),
+  (10, 'reset_date',   'Next reset',   'date');
+
+-- Anthropic API (id=11)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (11, 'monthly_bill',       'Month-to-date spend', 'currency'),
+  (11, 'input_tokens_mtd',   'Input tokens MTD',    'number'),
+  (11, 'output_tokens_mtd',  'Output tokens MTD',   'number');
+
+-- OpenAI API (id=12)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (12, 'monthly_bill',       'Month-to-date spend', 'currency'),
+  (12, 'input_tokens_mtd',   'Input tokens MTD',    'number'),
+  (12, 'output_tokens_mtd',  'Output tokens MTD',   'number');
+
+-- Groq (id=13)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (13, 'monthly_bill', 'Month-to-date spend', 'currency'),
+  (13, 'tokens_mtd',   'Tokens MTD',          'number');
+
+-- Mistral (id=14)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (14, 'monthly_bill', 'Month-to-date spend', 'currency'),
+  (14, 'tokens_mtd',   'Tokens MTD',          'number');
+
+-- AWS (id=1)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (1, 'monthly_bill', 'Month-to-date spend', 'currency'),
+  (1, 'last_bill',    'Last month total',    'currency');
+
+-- GCP (id=2)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (2, 'monthly_bill', 'Month-to-date spend', 'currency'),
+  (2, 'last_bill',    'Last month total',    'currency');
+
+-- Azure (id=3)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (3, 'monthly_bill', 'Month-to-date spend', 'currency'),
+  (3, 'last_bill',    'Last month total',    'currency');
+
+-- Vercel (id=4)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (4, 'monthly_bill',  'Monthly bill',   'currency'),
+  (4, 'bandwidth_gb',  'Bandwidth used', 'number');
+
+-- Railway (id=5)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (5, 'monthly_bill',  'Month-to-date spend', 'currency'),
+  (5, 'credits_used',  'Credits used',        'number');
+
+-- Cloudflare (id=6)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (6, 'monthly_bill',  'Monthly bill',  'currency'),
+  (6, 'requests_mtd',  'Requests MTD',  'number');
+
+-- PlanetScale (id=7)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (7, 'monthly_bill',   'Monthly bill',   'currency'),
+  (7, 'rows_read_mtd',  'Rows read MTD',  'number');
+
+-- GitHub Copilot (id=15)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (15, 'monthly_bill', 'Monthly bill', 'currency'),
+  (15, 'seats',        'Seats',        'number');
+
+-- Cursor (id=16)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (16, 'monthly_bill', 'Monthly bill', 'currency'),
+  (16, 'plan',         'Plan',         'text');
+
+-- Linear (id=17)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (17, 'monthly_bill', 'Monthly bill', 'currency'),
+  (17, 'seats',        'Seats',        'number');
+
+-- Sentry (id=18)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (18, 'monthly_bill', 'Monthly bill', 'currency'),
+  (18, 'errors_mtd',   'Errors MTD',   'number'),
+  (18, 'plan',         'Plan',         'text');
