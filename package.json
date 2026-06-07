@@ -9,7 +9,7 @@
     "dev:client": "vite client",
     "build": "vite build --config client/vite.config.js",
     "electron": "electron .",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\"",
+    "dev": "concurrently \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\"",
     "test": "vitest run --config client/vite.config.js"
   },
   "dependencies": {
@@ -21,12 +21,13 @@
     "node-notifier": "^10.0.1"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@tanstack/react-query": "*",
     "@types/better-sqlite3": "*",
     "@vitejs/plugin-react": "*",
     "autoprefixer": "*",
     "concurrently": "*",
-    "electron": "*",
+    "electron": "^42.3.3",
     "lucide-react": "*",
     "react": "*",
     "react-dom": "*",

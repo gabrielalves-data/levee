@@ -7,7 +7,8 @@ const {
 const path   = require('path');
 const crypto = require('crypto');
 const fs     = require('fs');
-const { fork } = require('child_process');
+const http   = require('http');
+const { spawn } = require('child_process');
 const { createOverlay, getOverlay } = require('./overlay');
 
 let keytar;
@@ -44,15 +45,63 @@ async function startServer() {
     }
   } catch { /* config absent or unreadable — open unencrypted */ }
 
-  serverProcess = fork(path.join(__dirname, '..', 'server', 'index.js'), [], {
+  // Run the server under system Node.js, not Electron's embedded Node.
+  // fork() inherits Electron's Node ABI, which mismatches native modules
+  // (better-sqlite3) compiled for system Node. spawn() with the system
+  // node binary avoids the ABI mismatch entirely.
+  const nodeBin = process.env.npm_node_execpath || 'node';
+  serverProcess = spawn(nodeBin, [path.join(__dirname, '..', 'server', 'index.js')], {
     env: {
       ...process.env,
       PORT:           String(PORT),
       DEVCOST_TOKEN:  LAUNCH_TOKEN,
       DEVCOST_DB_KEY: dbKey,
     },
-    silent: false,
+    stdio: 'inherit',
+    windowsHide: true,
   });
+  serverProcess.on('error', (err) => {
+    console.error('[devcost] server process error:', err.message);
+  });
+
+  // Wait until OUR server (matching this launch's token) is answering before
+  // loading the UI. Sending the token lets us tell our server apart from a
+  // stale zombie on the same port: a foreign server replies 401, so we keep
+  // waiting and fail loudly on timeout instead of silently serving the UI
+  // against the wrong process.
+  await new Promise((resolve, reject) => {
+    const deadline = Date.now() + 15_000;
+    const check = () => {
+      const req = http.request(
+        { host: '127.0.0.1', port: PORT, path: '/', method: 'GET',
+          headers: { 'x-devcost-token': LAUNCH_TOKEN } },
+        (res) => {
+          res.resume();
+          if (res.statusCode === 401) {
+            // Port held by a different server (wrong token). Don't accept it.
+            if (Date.now() >= deadline) {
+              reject(new Error(
+                `[devcost] port ${PORT} is held by another process with a ` +
+                `different token (stale server?). Close it and relaunch.`));
+            } else {
+              setTimeout(check, 200);
+            }
+          } else {
+            resolve(); // our token accepted (404 for "/" is expected)
+          }
+        });
+      req.on('error', () => {
+        if (Date.now() >= deadline) {
+          reject(new Error('[devcost] server did not start within 15 s'));
+        } else {
+          setTimeout(check, 150);
+        }
+      });
+      req.end();
+    };
+    setTimeout(check, 150);
+  });
+  console.log('[devcost] server ready');
 }
 
 function createMainWindow() {
@@ -67,15 +116,27 @@ function createMainWindow() {
     },
   });
 
+  // Single CSP handler for the shared default session (covers both the main
+  // window and the overlay). onHeadersReceived allows only ONE listener per
+  // session, so this must be the only registration — overlay.js must not add
+  // its own, or it would silently replace this one.
   mainWin.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; connect-src http://127.0.0.1:3001; script-src 'self'; style-src 'self' 'unsafe-inline'",
-        ],
-      },
-    });
+    // Dev loads from Vite (:5173); prod loads from file://.
+    // Vite needs 'unsafe-inline' for React's refresh preamble and ws: for HMR.
+    const fromVite = details.url.startsWith('http://127.0.0.1:5173');
+    const csp = fromVite
+      ? "default-src 'self'; connect-src http://127.0.0.1:3001 http://127.0.0.1:5173 ws://127.0.0.1:5173; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+      : "default-src 'self'; connect-src http://127.0.0.1:3001; script-src 'self'; style-src 'self' 'unsafe-inline'";
+
+    // Strip any pre-existing CSP header (any casing) so ours is the only one —
+    // multiple CSP headers are combined by the most-restrictive intersection.
+    const headers = {};
+    for (const [k, v] of Object.entries(details.responseHeaders)) {
+      if (k.toLowerCase() !== 'content-security-policy') headers[k] = v;
+    }
+    headers['Content-Security-Policy'] = [csp];
+
+    callback({ responseHeaders: headers });
   });
 
   mainWin.webContents.on('will-navigate', (e, url) => {
@@ -84,6 +145,7 @@ function createMainWindow() {
 
   const isDev = !app.isPackaged;
   if (isDev) {
+    mainWin.webContents.openDevTools();
     mainWin.loadURL('http://127.0.0.1:5173');
   } else {
     mainWin.loadFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'));
@@ -164,3 +226,9 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   serverProcess?.kill();
 });
+
+// Terminal Ctrl+C / kill: ensure the spawned server dies too, so it can't
+// become an orphan squatting on the port for the next launch.
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => { serverProcess?.kill(); app.exit(0); });
+}

@@ -43,16 +43,9 @@ function createOverlay(preloadPath) {
 
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
 
-  overlayWin.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; connect-src http://127.0.0.1:3001; script-src 'self'; style-src 'self' 'unsafe-inline'",
-        ],
-      },
-    });
-  });
+  // NOTE: CSP is set by the single onHeadersReceived handler in main.js, which
+  // runs on this same (default) session. Registering another listener here
+  // would replace that one, so we deliberately do not set CSP in the overlay.
 
   overlayWin.webContents.on('will-navigate', (e, url) => {
     if (!/^(file:|http:\/\/127\.0\.0\.1)/.test(url)) e.preventDefault();
