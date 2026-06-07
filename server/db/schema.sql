@@ -47,5 +47,10 @@ CREATE TABLE IF NOT EXISTS monthly_snapshots (
   UNIQUE (year, month)
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_metrics_service ON service_metrics(service_id);
 CREATE INDEX IF NOT EXISTS idx_services_active  ON services(active);

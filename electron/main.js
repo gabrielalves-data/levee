@@ -1,17 +1,35 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain } = require('electron');
-const path = require('path');
+const {
+  app, BrowserWindow, Tray, Menu,
+  globalShortcut, ipcMain, nativeImage,
+} = require('electron');
+const path   = require('path');
 const crypto = require('crypto');
+const fs     = require('fs');
 const { fork } = require('child_process');
-const { createOverlay } = require('./overlay');
+const { createOverlay, getOverlay } = require('./overlay');
 
-const PORT = 3001;
+const PORT         = 3001;
 const LAUNCH_TOKEN = crypto.randomBytes(32).toString('hex');
 
-let mainWin = null;
-let tray = null;
+let mainWin       = null;
+let tray          = null;
 let serverProcess = null;
+
+// Build a simple 16×16 indigo square as the tray icon.
+function createTrayIcon() {
+  const size = 16;
+  const data = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const off = i * 4;
+    data[off]     = 99;   // R  (#6366f1 indigo-500)
+    data[off + 1] = 102;  // G
+    data[off + 2] = 241;  // B
+    data[off + 3] = 255;  // A
+  }
+  return nativeImage.createFromBuffer(data, { width: size, height: size });
+}
 
 function startServer() {
   serverProcess = fork(path.join(__dirname, '..', 'server', 'index.js'), [], {
@@ -50,7 +68,6 @@ function createMainWindow() {
     mainWin.loadFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'));
   }
 
-  // Minimize to tray on close
   mainWin.on('close', (e) => {
     e.preventDefault();
     mainWin.hide();
@@ -58,30 +75,68 @@ function createMainWindow() {
 }
 
 function setupTray() {
-  // TODO: replace icon.png with actual asset
-  tray = new Tray(path.join(__dirname, 'icon.png'));
+  tray = new Tray(createTrayIcon());
   tray.setToolTip('DevCost');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open DevCost', click: () => mainWin?.show() },
+    { label: 'Open DevCost',   click: () => { mainWin?.show(); mainWin?.focus(); } },
+    { label: 'Toggle Overlay', click: () => toggleOverlay() },
     { type: 'separator' },
     { label: 'Quit', click: () => app.exit(0) },
   ]));
-  tray.on('double-click', () => mainWin?.show());
+  tray.on('double-click', () => { mainWin?.show(); mainWin?.focus(); });
+}
+
+function toggleOverlay() {
+  const ov = getOverlay();
+  if (!ov) return;
+  ov.isVisible() ? ov.hide() : ov.show();
+}
+
+function boundsPath() {
+  return path.join(app.getPath('home'), '.devcost', 'overlay-bounds.json');
 }
 
 app.whenReady().then(() => {
+  // Enable launch-at-login by default on first run.
+  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+
   startServer();
   createMainWindow();
   setupTray();
-  createOverlay(path.join(__dirname, 'preload.js'));
 
-  globalShortcut.register('CommandOrControl+Shift+D', () => {
-    mainWin?.isVisible() ? mainWin.hide() : (mainWin?.show(), mainWin?.focus());
+  const preloadPath = path.join(__dirname, 'preload.js');
+  const ov = createOverlay(preloadPath);
+
+  // Persist overlay position after the user drags it.
+  let moveTimer = null;
+  ov.on('moved', () => {
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => {
+      const [x, y] = ov.getPosition();
+      try { fs.writeFileSync(boundsPath(), JSON.stringify({ x, y })); } catch {}
+    }, 200);
   });
+
+  globalShortcut.register('CommandOrControl+Shift+G', toggleOverlay);
 });
+
+// ── IPC handlers ───────────────────────────────────────────────────────────
 
 ipcMain.handle('get-token', () => LAUNCH_TOKEN);
 ipcMain.handle('get-port',  () => PORT);
+
+ipcMain.on('open-dashboard', () => {
+  mainWin?.show();
+  mainWin?.focus();
+  mainWin?.webContents.send('navigate', '/services');
+});
+
+ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);
+
+ipcMain.handle('set-login-item', (_e, enable) => {
+  app.setLoginItemSettings({ openAtLogin: !!enable, openAsHidden: !!enable });
+  return true;
+});
 
 app.on('window-all-closed', (e) => e.preventDefault());
 app.on('will-quit', () => {

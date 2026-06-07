@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useServices, useCreateService, usePatchService, useArchiveService } from '../hooks/useServices'
 import { apiFetch } from '../api'
+import WidgetConfig from '../components/Widget'
 
 const CATEGORIES = [
   { value: 'cloud',    label: 'Cloud' },
@@ -259,6 +260,36 @@ function ServiceRow({ service }) {
   )
 }
 
+function LaunchAtLoginToggle() {
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    window.devcost?.getLoginItem?.().then(v => setEnabled(!!v))
+  }, [])
+
+  function toggle() {
+    const next = !enabled
+    setEnabled(next)
+    window.devcost?.setLoginItem?.(next)
+  }
+
+  return (
+    <div className="flex items-center justify-between bg-slate-800/60 rounded-lg px-3 py-2.5 border border-slate-700/50">
+      <div>
+        <p className="text-sm text-white">Launch at Login</p>
+        <p className="text-xs text-slate-500 mt-0.5">Start DevCost when you log in</p>
+      </div>
+      <button
+        onClick={toggle}
+        className={`transition-colors ${enabled ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-600 hover:text-slate-400'}`}
+        title={enabled ? 'Disable' : 'Enable'}
+      >
+        {enabled ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+      </button>
+    </div>
+  )
+}
+
 export default function Settings() {
   const [showForm, setShowForm] = useState(false)
   const { data: services = [], isLoading } = useServices({ all: true })
@@ -289,6 +320,17 @@ export default function Settings() {
             {services.map(s => <ServiceRow key={s.id} service={s} />)}
           </div>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-300">Overlay Widget</h3>
+        <p className="text-xs text-slate-500">Configure the 4 slots shown in the always-on-top overlay (Ctrl+Shift+G).</p>
+        <WidgetConfig />
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-300">App</h3>
+        <LaunchAtLoginToggle />
       </section>
     </div>
   )

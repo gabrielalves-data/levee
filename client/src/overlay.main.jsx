@@ -1,13 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
+import Overlay from './overlay'
 import './index.css'
 import { initToken } from './api'
 
 initToken().then(() => {
-  ReactDOM.createRoot(document.getElementById('root')).render(
+  ReactDOM.createRoot(document.getElementById('overlay-root')).render(
     <React.StrictMode>
-      <App />
+      <Overlay />
     </React.StrictMode>
   )
 })

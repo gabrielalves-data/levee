@@ -1,14 +1,32 @@
 'use strict';
 
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, app, screen } = require('electron');
 const path = require('path');
+const fs   = require('fs');
 
 let overlayWin = null;
 
+function boundsPath() {
+  return path.join(app.getPath('home'), '.devcost', 'overlay-bounds.json');
+}
+
+function getSavedBounds() {
+  try {
+    return JSON.parse(fs.readFileSync(boundsPath(), 'utf8'));
+  } catch { return null; }
+}
+
 function createOverlay(preloadPath) {
+  const { width } = screen.getPrimaryDisplay().workAreaSize;
+  const saved = getSavedBounds();
+  const x = saved?.x ?? width - 260 - 16;
+  const y = saved?.y ?? 16;
+
   overlayWin = new BrowserWindow({
-    width: 320,
-    height: 80,
+    width: 260,
+    height: 320,
+    x,
+    y,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -23,6 +41,8 @@ function createOverlay(preloadPath) {
     },
   });
 
+  overlayWin.setAlwaysOnTop(true, 'screen-saver');
+
   overlayWin.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -34,7 +54,13 @@ function createOverlay(preloadPath) {
     });
   });
 
-  overlayWin.loadFile(path.join(__dirname, '..', 'client', 'dist', 'overlay.html'));
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    overlayWin.loadURL('http://127.0.0.1:5173/overlay.html');
+  } else {
+    overlayWin.loadFile(path.join(__dirname, '..', 'client', 'dist', 'overlay.html'));
+  }
+
   return overlayWin;
 }
 

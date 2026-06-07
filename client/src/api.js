@@ -1,10 +1,12 @@
-// In dev: set VITE_DEVCOST_TOKEN to the token printed by the server on startup.
-// In Electron (Phase 3): preload injects window.__devcost_token before any fetch.
-function getToken() {
-  return (typeof window !== 'undefined' && window.__devcost_token)
-    || import.meta.env.VITE_DEVCOST_TOKEN
-    || ''
+let _token = import.meta.env.VITE_DEVCOST_TOKEN || '';
+
+export async function initToken() {
+  if (typeof window !== 'undefined' && window.devcost?.getToken) {
+    _token = await window.devcost.getToken();
+  }
 }
+
+function getToken() { return _token; }
 
 export async function apiFetch(path, opts = {}) {
   const res = await fetch(path, {

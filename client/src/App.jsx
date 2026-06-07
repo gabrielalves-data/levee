@@ -1,5 +1,6 @@
+import { useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Grid2X2, Settings } from 'lucide-react'
 import Overview from './pages/Overview'
 import Services from './pages/Services'
@@ -45,10 +46,21 @@ function Sidebar() {
   )
 }
 
+// Listens for IPC-driven navigation events (e.g. clicking a slot in the overlay).
+function NavigationListener() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (!window.devcost?.onNavigate) return
+    return window.devcost.onNavigate((route) => navigate(route))
+  }, [navigate])
+  return null
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <NavigationListener />
         <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">
