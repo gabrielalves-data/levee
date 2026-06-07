@@ -19,16 +19,18 @@
     "node-cron": "*"
   },
   "devDependencies": {
+    "@tanstack/react-query": "*",
     "@vitejs/plugin-react": "*",
     "@types/better-sqlite3": "*",
+    "autoprefixer": "*",
     "concurrently": "*",
     "electron": "*",
     "lucide-react": "*",
     "react": "*",
     "react-dom": "*",
-    "react-query": "*",
+    "react-router-dom": "*",
     "recharts": "*",
-    "tailwindcss": "*",
+    "tailwindcss": "^3",
     "vite": "*",
     "wait-on": "*"
   }
