@@ -376,6 +376,47 @@ function EncryptionToggle() {
   )
 }
 
+function OverlaySection() {
+  const [enabled, setEnabled] = useState(true)
+
+  useEffect(() => {
+    window.devcost?.getOverlayEnabled?.().then(v => {
+      if (v !== undefined) setEnabled(!!v)
+    })
+  }, [])
+
+  function toggle() {
+    const next = !enabled
+    setEnabled(next)
+    window.devcost?.setOverlayEnabled?.(next)
+  }
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-medium text-slate-300">Overlay Widget</h3>
+      <div className="flex items-center justify-between bg-slate-800/60 rounded-lg px-3 py-2.5 border border-slate-700/50">
+        <div>
+          <p className="text-sm text-white">Show Overlay</p>
+          <p className="text-xs text-slate-500 mt-0.5">Always-on-top widget (Ctrl+Shift+G)</p>
+        </div>
+        <button
+          onClick={toggle}
+          className={`transition-colors ${enabled ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-600 hover:text-slate-400'}`}
+          title={enabled ? 'Hide overlay' : 'Show overlay'}
+        >
+          {enabled ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+        </button>
+      </div>
+      {enabled && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">Configure the slots shown in the overlay.</p>
+          <WidgetConfig />
+        </div>
+      )}
+    </section>
+  )
+}
+
 function LaunchAtLoginToggle() {
   const [enabled, setEnabled] = useState(false)
 
@@ -438,11 +479,7 @@ export default function Settings() {
         )}
       </section>
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-300">Overlay Widget</h3>
-        <p className="text-xs text-slate-500">Configure the 4 slots shown in the always-on-top overlay (Ctrl+Shift+G).</p>
-        <WidgetConfig />
-      </section>
+      <OverlaySection />
 
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-slate-300">App</h3>

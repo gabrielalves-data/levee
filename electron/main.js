@@ -16,6 +16,14 @@ try { keytar = require('keytar'); } catch { keytar = null; }
 
 const PORT         = 3001;
 const LAUNCH_TOKEN = crypto.randomBytes(32).toString('hex');
+const CONFIG_PATH  = path.join(require('os').homedir(), '.devcost', 'config.json');
+
+function getConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
+}
+function saveConfig(cfg) {
+  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg)); } catch {}
+}
 
 let mainWin       = null;
 let tray          = null;
@@ -36,10 +44,9 @@ function createTrayIcon() {
 }
 
 async function startServer() {
-  const cfgPath = path.join(app.getPath('home'), '.devcost', 'config.json');
   let dbKey = '';
   try {
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    const cfg = getConfig();
     if (cfg.dbEncrypted && keytar) {
       dbKey = (await keytar.getPassword('devcost', 'db-encryption-key')) ?? '';
     }
@@ -189,6 +196,7 @@ app.whenReady().then(async () => {
 
   const preloadPath = path.join(__dirname, 'preload.js');
   const ov = createOverlay(preloadPath);
+  if (getConfig().overlayEnabled !== true) ov.hide();
 
   // Persist overlay position after the user drags it.
   let moveTimer = null;
@@ -219,6 +227,27 @@ ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('set-login-item', (_e, enable) => {
   app.setLoginItemSettings({ openAtLogin: !!enable, openAsHidden: !!enable });
   return true;
+});
+
+ipcMain.handle('get-overlay-enabled', () => getConfig().overlayEnabled === true);
+
+ipcMain.handle('set-overlay-enabled', (_e, enable) => {
+  const cfg = getConfig();
+  cfg.overlayEnabled = !!enable;
+  saveConfig(cfg);
+  const ov = getOverlay();
+  if (ov && !ov.isDestroyed()) enable ? ov.show() : ov.hide();
+  return true;
+});
+
+ipcMain.on('resize-overlay', (_e, width, height) => {
+  const ov = getOverlay();
+  if (ov && !ov.isDestroyed()) ov.setSize(Math.round(width), Math.round(height));
+});
+
+ipcMain.on('widget-updated', () => {
+  const ov = getOverlay();
+  if (ov && !ov.isDestroyed()) ov.webContents.send('widget-updated');
 });
 
 app.on('window-all-closed', (e) => e.preventDefault());

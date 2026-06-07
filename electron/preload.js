@@ -9,8 +9,17 @@ try {
     getToken:      () => ipcRenderer.invoke('get-token'),
     getPort:       () => ipcRenderer.invoke('get-port'),
     openDashboard: (serviceId) => ipcRenderer.send('open-dashboard', serviceId),
-    getLoginItem:  () => ipcRenderer.invoke('get-login-item'),
-    setLoginItem:  (enable) => ipcRenderer.invoke('set-login-item', enable),
+    getLoginItem:     () => ipcRenderer.invoke('get-login-item'),
+    setLoginItem:     (enable) => ipcRenderer.invoke('set-login-item', enable),
+    getOverlayEnabled: () => ipcRenderer.invoke('get-overlay-enabled'),
+    setOverlayEnabled: (enable) => ipcRenderer.invoke('set-overlay-enabled', enable),
+    resizeOverlay:       (w, h) => ipcRenderer.send('resize-overlay', w, h),
+    notifyWidgetUpdate:  ()     => ipcRenderer.send('widget-updated'),
+    onWidgetUpdate: (cb) => {
+      const handler = () => cb();
+      ipcRenderer.on('widget-updated', handler);
+      return () => ipcRenderer.removeListener('widget-updated', handler);
+    },
     // These return a cleanup function the caller invokes on unmount.
     // contextBridge proxies returned functions across the bridge.
     onCostUpdate: (cb) => {

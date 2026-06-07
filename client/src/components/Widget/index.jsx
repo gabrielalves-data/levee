@@ -28,8 +28,20 @@ function SlotEditor({ slot, onSave, onClear }) {
     setMKey('')
   }
 
+  function handleMKeyChange(val) {
+    setMKey(val)
+    if (svcId && val) {
+      onSave({ service_id: Number(svcId), metric_key: val, label_override: label.trim() || null })
+    }
+  }
+
+  function handleLabelBlur() {
+    if (svcId && mKey) {
+      onSave({ service_id: Number(svcId), metric_key: mKey, label_override: label.trim() || null })
+    }
+  }
+
   const preview = formatPreview(metrics.find(m => m.metric_key === mKey))
-  const canSave = svcId && mKey
 
   return (
     <div className="space-y-2">
@@ -38,7 +50,7 @@ function SlotEditor({ slot, onSave, onClear }) {
           <option value="">Service…</option>
           {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <select value={mKey} onChange={e => setMKey(e.target.value)} disabled={!svcId} className={SEL + ' flex-1'}>
+        <select value={mKey} onChange={e => handleMKeyChange(e.target.value)} disabled={!svcId} className={SEL + ' flex-1'}>
           <option value="">Metric…</option>
           {metrics.map(m => <option key={m.metric_key} value={m.metric_key}>{m.label}</option>)}
         </select>
@@ -48,19 +60,13 @@ function SlotEditor({ slot, onSave, onClear }) {
         <input
           value={label}
           onChange={e => setLabel(e.target.value)}
+          onBlur={handleLabelBlur}
           placeholder="Label override (optional)"
           className={SEL + ' flex-1 text-xs'}
         />
         {preview !== null && (
           <span className="text-xs text-slate-400 shrink-0 tabular-nums">{preview}</span>
         )}
-        <button
-          onClick={() => onSave({ service_id: Number(svcId), metric_key: mKey, label_override: label.trim() || null })}
-          disabled={!canSave}
-          className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white rounded-lg transition-colors shrink-0"
-        >
-          Save
-        </button>
         {slot.service_id && (
           <button onClick={onClear} title="Clear slot" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors shrink-0">
             <X size={14} />
@@ -69,6 +75,10 @@ function SlotEditor({ slot, onSave, onClear }) {
       </div>
     </div>
   )
+}
+
+function notifyOverlay() {
+  window.devcost?.notifyWidgetUpdate?.()
 }
 
 export default function WidgetConfig() {
@@ -95,8 +105,8 @@ export default function WidgetConfig() {
           <SlotEditor
             key={`${slot.slot_index}-${slot.service_id ?? 'empty'}-${slot.metric_key ?? 'empty'}`}
             slot={slot}
-            onSave={cfg  => setSlot.mutate({ slotIndex: slot.slot_index, ...cfg })}
-            onClear={() => clearSlot.mutate(slot.slot_index)}
+            onSave={cfg  => setSlot.mutate({ slotIndex: slot.slot_index, ...cfg }, { onSuccess: notifyOverlay })}
+            onClear={() => clearSlot.mutate(slot.slot_index, { onSuccess: notifyOverlay })}
           />
         </div>
       ))}

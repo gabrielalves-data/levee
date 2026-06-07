@@ -19,12 +19,12 @@ function getSavedBounds() {
 function createOverlay(preloadPath) {
   const { width } = screen.getPrimaryDisplay().workAreaSize;
   const saved = getSavedBounds();
-  const x = saved?.x ?? width - 260 - 16;
+  const x = saved?.x ?? width - 296 - 16;
   const y = saved?.y ?? 16;
 
   overlayWin = new BrowserWindow({
-    width: 260,
-    height: 320,
+    width: 296,
+    height: 72,
     x,
     y,
     frame: false,
