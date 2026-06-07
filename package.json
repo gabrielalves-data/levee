@@ -1,0 +1,35 @@
+{
+  "name": "devcost",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-first local developer cost tracker",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev:server": "node server/index.js",
+    "dev:client": "vite client",
+    "build": "vite build --config client/vite.config.js",
+    "electron": "electron .",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\""
+  },
+  "dependencies": {
+    "better-sqlite3": "*",
+    "express": "*",
+    "helmet": "*",
+    "keytar": "*",
+    "node-cron": "*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "*",
+    "@types/better-sqlite3": "*",
+    "concurrently": "*",
+    "electron": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "react-query": "*",
+    "recharts": "*",
+    "tailwindcss": "*",
+    "vite": "*",
+    "wait-on": "*"
+  }
+}

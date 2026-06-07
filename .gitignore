@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-electron/
+client/dist/
+out/
+
+# Electron packaged app
+release/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python virtualenv
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# SQLite databases (user data lives at ~/.devcost/, but guard local copies too)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+electron-debug.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Vite
+.vite/
+client/.vite/
+
+# Tailwind / PostCSS cache
+.postcss-cache/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.tsbuildinfo
+.cache/
