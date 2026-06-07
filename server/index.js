@@ -27,7 +27,7 @@ app.use('/api/settings',   settingsRouter);
 
 app.listen(PORT, HOST, () => {
   console.log(`[devcost] listening on ${HOST}:${PORT}`);
-  console.log(`[devcost] LAUNCH_TOKEN=${LAUNCH_TOKEN}`);
+  console.log('[devcost] server ready (token set)');
   startCrons();
 });
 

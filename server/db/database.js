@@ -12,7 +12,9 @@ if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { mode: 0o700, recursive: true });
 }
 
+const prevMask = process.umask(0o077);
 const db = new Database(DB_PATH);
+process.umask(prevMask);
 fs.chmodSync(DB_PATH, 0o600);
 
 db.pragma('journal_mode = WAL');

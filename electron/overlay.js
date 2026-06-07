@@ -54,6 +54,10 @@ function createOverlay(preloadPath) {
     });
   });
 
+  overlayWin.webContents.on('will-navigate', (e, url) => {
+    if (!/^(file:|http:\/\/127\.0\.0\.1)/.test(url)) e.preventDefault();
+  });
+
   const isDev = !app.isPackaged;
   if (isDev) {
     overlayWin.loadURL('http://127.0.0.1:5173/overlay.html');
