@@ -1,7 +1,8 @@
 # DevCost
 
 Privacy-first, local-only desktop app for tracking developer costs — cloud, AI models,
-AI APIs, dev tools. No cloud sync, no accounts, no telemetry, zero outbound network calls.
+AI APIs, dev tools. No cloud sync, no accounts, no telemetry, zero outbound network calls
+by default. Supports both static catalog plans and live API-pulled metrics.
 
 ## Setup
 
@@ -12,13 +13,50 @@ npm run dev                # starts server + client + electron concurrently
 
 ## Architecture
 
-| Layer    | Tech                               | Notes                          |
-|----------|------------------------------------|--------------------------------|
-| Frontend | React + Vite, Tailwind, Recharts   | Main window + overlay widget   |
-| Backend  | Express.js (loopback only)         | REST API on 127.0.0.1:3001     |
-| Desktop  | Electron                           | Tray, hotkey, overlay          |
-| DB       | better-sqlite3                     | ~/.devcost/devcost.db (0600)   |
-| Secrets  | keytar                             | OS keychain, never in DB       |
+| Layer      | Tech                               | Notes                          |
+|------------|------------------------------------|--------------------------------|
+| Frontend   | React + Vite, Tailwind, Recharts   | Main window + overlay widget   |
+| Backend    | Express.js (loopback only)         | REST API on 127.0.0.1:3001     |
+| Desktop    | Electron                           | Tray, hotkey, overlay          |
+| DB         | better-sqlite3                     | ~/.devcost/devcost.db (0600)   |
+| Secrets    | keytar                             | OS keychain, never in DB       |
+| Connectors | Per-provider modules               | Live API pull, secrets in OS keychain |
+
+## Data retrieval modes
+
+Each tracked service uses one of three connector types:
+
+| Mode      | How it works |
+|-----------|-------------|
+| `manual`  | Costs entered by hand — no API calls |
+| `catalog` | Pick a fixed plan from `server/catalog/plans.json`; metrics set automatically |
+| `api`     | Live pull via a registered connector; secrets stored in OS keychain |
+
+### Catalog plans
+
+Catalog covers fixed-price subscriptions. Apply a plan via `POST /api/catalog/apply`
+and DevCost sets the monthly bill, plan label, and next reset date automatically.
+
+Supported providers: Claude, ChatGPT, Gemini, Cursor, GitHub Copilot.
+
+### API connectors
+
+Live connectors pull real metrics from provider APIs on demand and on the hourly cron.
+Each connector declares the exact hostnames it may contact — the HTTP client rejects
+all other outbound requests.
+
+| Connector key    | Provider          | Auth type       |
+|------------------|-------------------|-----------------|
+| `anthropic`      | Anthropic API     | apiKey          |
+| `openai`         | OpenAI API        | apiKey          |
+| `aws`            | AWS Cost Explorer | awsKeyPair      |
+| `github_copilot` | GitHub Copilot    | apiKey          |
+| `vercel`         | Vercel            | apiKey          |
+| `sentry`         | Sentry            | apiKey          |
+| `railway`        | Railway           | apiKey          |
+| `planetscale`    | PlanetScale       | apiKey          |
+| `cloudflare`     | Cloudflare        | apiKey          |
+| `linear`         | Linear            | apiKey          |
 
 ## Security model
 
@@ -27,6 +65,7 @@ npm run dev                # starts server + client + electron concurrently
 - Electron: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, strict CSP
 - DB file and directory have restrictive OS permissions (0600 / 0700)
 - API secrets stored in OS keychain via keytar — never written to SQLite or exports
+- Connector HTTP client enforces a per-connector hostname allowlist; no other outbound calls permitted
 
 ## Global hotkey
 
@@ -36,6 +75,8 @@ npm run dev                # starts server + client + electron concurrently
 
 ## API routes
 
+### Services
+
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/services` | List active services (`?all=1` includes inactive) |
@@ -43,12 +84,38 @@ npm run dev                # starts server + client + electron concurrently
 | POST | `/api/services` | Create service |
 | PATCH | `/api/services/:id` | Update fields |
 | DELETE | `/api/services/:id` | Soft-archive (sets active=0) |
+
+### Metrics
+
+| Method | Path | Description |
+|--------|------|-------------|
 | GET | `/api/metrics/:serviceId` | All metrics for a service |
 | PUT | `/api/metrics/:serviceId/:metricKey` | Upsert a metric value |
 | DELETE | `/api/metrics/:serviceId/:metricKey` | Remove a metric |
+
+### Widget
+
+| Method | Path | Description |
+|--------|------|-------------|
 | GET | `/api/widget` | All widget slots with joined data |
 | PUT | `/api/widget/:slotIndex` | Assign/update a slot |
 | DELETE | `/api/widget/:slotIndex` | Clear a slot |
+
+### Catalog
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/catalog` | Full plan catalog |
+| POST | `/api/catalog/apply` | Apply a catalog plan to a service |
+
+### Connectors
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/connectors/providers` | List registered connector metadata |
+| PUT | `/api/connectors/:serviceId` | Configure connector + store secret(s) in keychain |
+| DELETE | `/api/connectors/:serviceId` | Disable connector + remove secret(s) from keychain |
+| POST | `/api/connectors/:serviceId/sync` | Trigger a manual sync |
 
 ---
 
@@ -109,25 +176,31 @@ curl -s http://127.0.0.1:3001/api/services \
 ### Sample write operations
 
 ```sh
+# Apply a catalog plan (Claude Pro = $20/month)
+curl -s -X POST http://127.0.0.1:3001/api/catalog/apply \
+  -H "x-devcost-token: $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"serviceId":1,"providerKey":"claude","planKey":"Pro"}'
+
+# Configure an API connector (e.g. Anthropic)
+curl -s -X PUT http://127.0.0.1:3001/api/connectors/8 \
+  -H "x-devcost-token: $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"providerKey":"anthropic","secret":"sk-ant-..."}'
+
+# Trigger a manual sync
+curl -s -X POST http://127.0.0.1:3001/api/connectors/8/sync \
+  -H "x-devcost-token: $TOKEN"
+
 # Create a custom service
 curl -s -X POST http://127.0.0.1:3001/api/services \
   -H "x-devcost-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"My VPS","provider":"Hetzner","category":"cloud","cost_model":"flat","monthly_cost":5.99}'
 
-# Set a metric value (e.g. Claude monthly bill = $20)
-curl -s -X PUT http://127.0.0.1:3001/api/metrics/8/monthly_bill \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"label":"Monthly bill","value_type":"currency","value_num":20.00,"unit":"USD"}'
-
-# Assign widget slot 0 to Claude monthly_bill
+# Assign widget slot 0 to a metric
 curl -s -X PUT http://127.0.0.1:3001/api/widget/0 \
   -H "x-devcost-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"service_id":8,"metric_key":"monthly_bill"}'
-
-# Read the widget
-curl -s http://127.0.0.1:3001/api/widget \
-  -H "x-devcost-token: $TOKEN"
 ```

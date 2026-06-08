@@ -1,34 +1,37 @@
 -- Catalog seed — is_seed=1 marks these as editable/archivable, never re-seeded.
 
+-- auto_available = 1 when a catalog plan or API connector exists for the service;
+-- 0 means the service has no auto data retrieval and is filled in by hand.
+
 -- Cloud
-INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
-  (1,  'AWS',         'Amazon',      'cloud', 'usage',  1),
-  (2,  'GCP',         'Google',      'cloud', 'usage',  1),
-  (3,  'Azure',       'Microsoft',   'cloud', 'usage',  1),
-  (4,  'Vercel',      'Vercel',      'cloud', 'hybrid', 1),
-  (5,  'Railway',     'Railway',     'cloud', 'usage',  1),
-  (6,  'Cloudflare',  'Cloudflare',  'cloud', 'hybrid', 1),
-  (7,  'PlanetScale', 'PlanetScale', 'cloud', 'usage',  1);
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (1,  'AWS',         'Amazon',      'cloud', 'usage',  1, 1),
+  (2,  'GCP',         'Google',      'cloud', 'usage',  1, 0),
+  (3,  'Azure',       'Microsoft',   'cloud', 'usage',  1, 0),
+  (4,  'Vercel',      'Vercel',      'cloud', 'hybrid', 1, 1),
+  (5,  'Railway',     'Railway',     'cloud', 'usage',  1, 1),
+  (6,  'Cloudflare',  'Cloudflare',  'cloud', 'hybrid', 1, 1),
+  (7,  'PlanetScale', 'PlanetScale', 'cloud', 'usage',  1, 1);
 
 -- AI Models (subscription plans)
-INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
-  (8,  'Claude',  'Anthropic', 'ai_model', 'flat', 1),
-  (9,  'ChatGPT', 'OpenAI',    'ai_model', 'flat', 1),
-  (10, 'Gemini',  'Google',    'ai_model', 'flat', 1);
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (8,  'Claude',  'Anthropic', 'ai_model', 'flat', 1, 1),
+  (9,  'ChatGPT', 'OpenAI',    'ai_model', 'flat', 1, 1),
+  (10, 'Gemini',  'Google',    'ai_model', 'flat', 1, 1);
 
 -- AI APIs (usage-based)
-INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
-  (11, 'Anthropic API', 'Anthropic', 'ai_api', 'usage', 1),
-  (12, 'OpenAI API',    'OpenAI',    'ai_api', 'usage', 1),
-  (13, 'Groq',          'Groq',      'ai_api', 'usage', 1),
-  (14, 'Mistral',       'Mistral',   'ai_api', 'usage', 1);
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (11, 'Anthropic API', 'Anthropic', 'ai_api', 'usage', 1, 1),
+  (12, 'OpenAI API',    'OpenAI',    'ai_api', 'usage', 1, 1),
+  (13, 'Groq',          'Groq',      'ai_api', 'usage', 1, 0),
+  (14, 'Mistral',       'Mistral',   'ai_api', 'usage', 1, 0);
 
 -- Dev Tools
-INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed) VALUES
-  (15, 'GitHub Copilot', 'GitHub',    'tool', 'flat',   1),
-  (16, 'Cursor',         'Anysphere', 'tool', 'flat',   1),
-  (17, 'Linear',         'Linear',    'tool', 'flat',   1),
-  (18, 'Sentry',         'Sentry',    'tool', 'hybrid', 1);
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (15, 'GitHub Copilot', 'GitHub',    'tool', 'flat',   1, 1),
+  (16, 'Cursor',         'Anysphere', 'tool', 'flat',   1, 1),
+  (17, 'Linear',         'Linear',    'tool', 'flat',   1, 1),
+  (18, 'Sentry',         'Sentry',    'tool', 'hybrid', 1, 1);
 
 -- Representative metrics per service (values left NULL — filled by user)
 

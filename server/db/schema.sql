@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS services (
   icon         TEXT,
   is_seed      INTEGER NOT NULL DEFAULT 0,
   active       INTEGER NOT NULL DEFAULT 1,
+  -- 1 when a catalog plan or API connector exists for this service; 0 means
+  -- values can only be entered manually (no auto data retrieval available).
+  auto_available INTEGER NOT NULL DEFAULT 0,
   connector_type TEXT  NOT NULL DEFAULT 'manual' CHECK (connector_type IN ('manual','catalog','api')),
   plan_key     TEXT,
   last_sync_at TEXT,

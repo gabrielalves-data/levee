@@ -38,9 +38,22 @@ const serviceMigrations = [
   ['last_sync_at', 'ALTER TABLE services ADD COLUMN last_sync_at TEXT'],
   ['sync_status',  'ALTER TABLE services ADD COLUMN sync_status TEXT'],
   ['sync_error',   'ALTER TABLE services ADD COLUMN sync_error TEXT'],
+  ['auto_available', 'ALTER TABLE services ADD COLUMN auto_available INTEGER NOT NULL DEFAULT 0'],
 ];
+const addedAutoAvailable = !serviceColumns.has('auto_available');
 for (const [col, sql] of serviceMigrations) {
   if (!serviceColumns.has(col)) db.exec(sql);
+}
+
+// Backfill auto_available on pre-existing seed rows: every seeded service has a
+// catalog plan or connector except these four, which can only be entered by hand.
+if (addedAutoAvailable) {
+  db.exec(`
+    UPDATE services
+    SET    auto_available = 1
+    WHERE  is_seed = 1
+      AND  name NOT IN ('GCP', 'Azure', 'Groq', 'Mistral')
+  `);
 }
 
 const { n } = db.prepare('SELECT COUNT(*) AS n FROM services').get();

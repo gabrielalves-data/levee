@@ -337,7 +337,7 @@ function ApiPanel({ service }) {
   )
 }
 
-function ConnectSection({ service, onEnterManually, showManual }) {
+function ConnectSection({ service }) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState('catalog')
 
@@ -409,16 +409,6 @@ function ConnectSection({ service, onEnterManually, showManual }) {
           }
         </div>
       )}
-
-      {/* Enter manually link — only when connector is active and manual edit not yet shown */}
-      {isAutoConnected && !showManual && (
-        <button
-          onClick={onEnterManually}
-          className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
-        >
-          Enter manually →
-        </button>
-      )}
     </div>
   )
 }
@@ -428,13 +418,14 @@ function ConnectSection({ service, onEnterManually, showManual }) {
 export default function ServiceCard({ service }) {
   const { data: metrics = [], isLoading } = useMetrics(service.id)
   const { data: snapshots = [] } = useSnapshots(2)
-  const [showManual, setShowManual] = useState(false)
 
   const lastSnapshot = snapshots[snapshots.length - 1]
   const prevBill = lastSnapshot?.breakdown?.find(r => r.id === service.id)?.monthly_bill ?? null
 
-  const isAutoConnected = service.connector_type !== 'manual'
-  const metricsReadOnly = isAutoConnected && !showManual
+  // Services with auto retrieval are filled by catalog/API connectors (read-only).
+  // Services without it are entered by hand.
+  const autoAvailable   = !!service.auto_available
+  const metricsReadOnly = autoAvailable
 
   const IconComponent = (service.icon && Icons[service.icon]) || Icons.Package
   const categoryStyle = CATEGORY_STYLES[service.category] ?? CATEGORY_STYLES.custom
@@ -475,11 +466,13 @@ export default function ServiceCard({ service }) {
         <p className="text-xs text-slate-600 border-t border-slate-700/60 pt-3">No metrics configured</p>
       )}
 
-      <ConnectSection
-        service={service}
-        showManual={showManual}
-        onEnterManually={() => setShowManual(true)}
-      />
+      {autoAvailable ? (
+        <ConnectSection service={service} />
+      ) : (
+        <p className="border-t border-slate-700/60 pt-2.5 text-xs text-slate-600">
+          No auto-sync available — values are entered manually.
+        </p>
+      )}
     </div>
   )
 }
