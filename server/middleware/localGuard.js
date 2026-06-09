@@ -17,19 +17,31 @@ function localGuard(req, res, next) {
     return res.status(403).json({ error: 'Forbidden: non-loopback host' });
   }
 
-  // Allow omitted Origin (curl, Electron file://, same-origin GET) and
-  // loopback Origins (http://127.0.0.1[:port], http://localhost[:port]).
-  // Reject anything else — DNS-rebinding defence.
+  // Allow omitted Origin (curl, same-origin GET), the opaque 'null' Origin sent
+  // by the packaged app's file:// renderer, and loopback Origins
+  // (http://127.0.0.1[:port], http://localhost[:port]). Reject anything else —
+  // DNS-rebinding defence. The per-launch token below is the real gate; a
+  // remote page can reach 'null'/loopback Origin but cannot read the token.
   const origin = req.headers['origin'];
-  if (origin && !ORIGIN_RE.test(origin)) {
+  if (origin && origin !== 'null' && !ORIGIN_RE.test(origin)) {
     return res.status(403).json({ error: 'Forbidden: untrusted origin' });
   }
 
-  if (req.headers['x-devcost-token'] !== LAUNCH_TOKEN) {
+  if (!tokenMatches(req.headers['x-devcost-token'])) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   next();
+}
+
+// Constant-time comparison over fixed-length digests so a request's validity
+// can't be inferred from response timing. Hashing first sidesteps the
+// equal-length requirement of timingSafeEqual.
+const TOKEN_DIGEST = crypto.createHash('sha256').update(LAUNCH_TOKEN).digest();
+function tokenMatches(provided) {
+  if (typeof provided !== 'string') return false;
+  const providedDigest = crypto.createHash('sha256').update(provided).digest();
+  return crypto.timingSafeEqual(TOKEN_DIGEST, providedDigest);
 }
 
 module.exports = { localGuard, LAUNCH_TOKEN };

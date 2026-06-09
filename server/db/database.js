@@ -18,7 +18,14 @@ process.umask(prevMask);
 fs.chmodSync(DB_PATH, 0o600);
 
 if (process.env.DEVCOST_DB_KEY) {
-  db.pragma(`key="${process.env.DEVCOST_DB_KEY}"`);
+  // The key is app-generated 32-byte hex (see encryption.js). Validate the shape
+  // before interpolating into the PRAGMA so a malformed/injected value can't
+  // break out of the quoted string.
+  const dbKey = process.env.DEVCOST_DB_KEY;
+  if (!/^[0-9a-f]{64}$/.test(dbKey)) {
+    throw new Error('DEVCOST_DB_KEY must be 64 lowercase hex characters');
+  }
+  db.pragma(`key="${dbKey}"`);
 }
 
 db.pragma('journal_mode = WAL');

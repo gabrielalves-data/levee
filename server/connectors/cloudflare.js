@@ -80,14 +80,16 @@ const connector = {
 
     // Analytics via GraphQL (requires zoneId).
     if (zoneId) {
+      // User-supplied zoneId/dates go through GraphQL variables, never string
+      // interpolation, so they can't alter the query structure.
       const query = {
-        query: `{
+        query: `query ($zoneTag: String!, $since: String!, $until: String!) {
           viewer {
-            zones(filter: { zoneTag: "${zoneId}" }) {
+            zones(filter: { zoneTag: $zoneTag }) {
               httpRequests1dGroups(
                 orderBy: [date_ASC]
                 limit: 31
-                filter: { date_geq: "${since}", date_leq: "${until}" }
+                filter: { date_geq: $since, date_leq: $until }
               ) {
                 sum { requests }
                 dimensions { date }
@@ -95,6 +97,7 @@ const connector = {
             }
           }
         }`,
+        variables: { zoneTag: zoneId, since, until },
       };
       fetches.push(
         _fetch('https://api.cloudflare.com/client/v4/graphql', { hosts: HOSTS }, {

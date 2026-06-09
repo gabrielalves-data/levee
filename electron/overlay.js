@@ -51,6 +51,9 @@ function createOverlay(preloadPath) {
     if (!/^(file:|http:\/\/127\.0\.0\.1)/.test(url)) e.preventDefault();
   });
 
+  // Deny renderer-initiated window creation — no uncontrolled outbound channel.
+  overlayWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   const isDev = !app.isPackaged;
   if (isDev) {
     overlayWin.loadURL('http://127.0.0.1:5173/overlay.html');

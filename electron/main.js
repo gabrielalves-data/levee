@@ -8,21 +8,37 @@ const path   = require('path');
 const crypto = require('crypto');
 const fs     = require('fs');
 const http   = require('http');
+const net    = require('net');
 const { spawn } = require('child_process');
 const { createOverlay, getOverlay } = require('./overlay');
 
 let keytar;
 try { keytar = require('keytar'); } catch { keytar = null; }
 
-const PORT         = 3001;
+// Packaged builds bind a random loopback port per launch so a well-known port
+// can't be squatted by another local process. Dev stays on 3001 to match the
+// Vite proxy target. Assigned in whenReady() before the server is spawned.
+let PORT           = 3001;
 const LAUNCH_TOKEN = crypto.randomBytes(32).toString('hex');
+
+// Ask the OS for a free loopback port (bind to 0, read it back, release it).
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
 const CONFIG_PATH  = path.join(require('os').homedir(), '.devcost', 'config.json');
 
 function getConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
 }
 function saveConfig(cfg) {
-  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg)); } catch {}
+  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg), { mode: 0o600 }); } catch {}
 }
 
 let mainWin       = null;
@@ -133,7 +149,7 @@ function createMainWindow() {
     const fromVite = details.url.startsWith('http://127.0.0.1:5173');
     const csp = fromVite
       ? "default-src 'self'; connect-src http://127.0.0.1:3001 http://127.0.0.1:5173 ws://127.0.0.1:5173; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
-      : "default-src 'self'; connect-src http://127.0.0.1:3001; script-src 'self'; style-src 'self' 'unsafe-inline'";
+      : "default-src 'self'; connect-src http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'";
 
     // Strip any pre-existing CSP header (any casing) so ours is the only one —
     // multiple CSP headers are combined by the most-restrictive intersection.
@@ -149,6 +165,10 @@ function createMainWindow() {
   mainWin.webContents.on('will-navigate', (e, url) => {
     if (!/^(file:|http:\/\/127\.0\.0\.1)/.test(url)) e.preventDefault();
   });
+
+  // Never let the renderer spawn a new window (would be an uncontrolled
+  // outbound channel). All navigation stays in-window and loopback-only.
+  mainWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   const isDev = !app.isPackaged;
   if (isDev) {
@@ -187,8 +207,16 @@ function boundsPath() {
 }
 
 app.whenReady().then(async () => {
-  // Enable launch-at-login by default on first run.
-  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+  // Enable launch-at-login once, on first run only. Re-applying every launch
+  // would silently override a user who later disables it in Settings.
+  const cfg = getConfig();
+  if (!cfg.firstRunDone) {
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+    saveConfig({ ...cfg, firstRunDone: true });
+  }
+
+  // Random port in the packaged app; fixed 3001 in dev so the Vite proxy resolves.
+  if (app.isPackaged) PORT = await getFreePort();
 
   await startServer();
   createMainWindow();
