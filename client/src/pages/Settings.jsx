@@ -455,7 +455,9 @@ export default function Settings() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Settings</h2>
+        <h2 className="text-xl font-semibold text-slate-100">
+          <span className="text-emerald-400 glow">&gt;</span> settings
+        </h2>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}

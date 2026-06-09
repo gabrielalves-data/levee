@@ -157,7 +157,9 @@ export default function Overview() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Overview</h2>
+        <h2 className="text-xl font-semibold text-slate-100">
+          <span className="text-emerald-400 glow">&gt;</span> overview
+        </h2>
         {!showAdd && (
           <button onClick={() => setShowAdd(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors">
@@ -199,28 +201,30 @@ export default function Overview() {
             <BarChart data={trendData} barCategoryGap="30%">
               <XAxis
                 dataKey="label"
-                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tick={{ fill: '#6aa97f', fontSize: 12, fontFamily: 'monospace' }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tick={{ fill: '#6aa97f', fontSize: 12, fontFamily: 'monospace' }}
                 tickFormatter={v => `$${v}`}
                 axisLine={false}
                 tickLine={false}
                 width={48}
               />
               <Tooltip
-                cursor={{ fill: '#1e293b' }}
+                cursor={{ fill: 'rgba(0,255,156,0.08)' }}
                 contentStyle={{
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: 8,
+                  background: '#0a0f0a',
+                  border: '1px solid #1d2a1d',
+                  borderRadius: 2,
                   fontSize: 12,
+                  fontFamily: 'monospace',
+                  color: '#bff7cf',
                 }}
                 formatter={v => [`$${v.toFixed(2)}`, 'Total']}
               />
-              <Bar dataKey="spend" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="spend" fill="#00ff9c" radius={[0, 0, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

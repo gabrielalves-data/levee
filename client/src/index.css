@@ -1,3 +1,73 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Terminal base ─────────────────────────────────────────────────────────── */
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    background: #050805;
+    color: #6aa97f;
+    font-feature-settings: 'liga' 1, 'calt' 1; /* coding-font ligatures */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(0, 255, 156, 0.28);
+    color: #eafff0;
+  }
+
+  /* Phosphor-green scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #1d2a1d #050805;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #050805; }
+  ::-webkit-scrollbar-thumb {
+    background: #1d2a1d;
+    border: 2px solid #050805;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #2e442e; }
+}
+
+/* ── Terminal flourishes ───────────────────────────────────────────────────── */
+@layer components {
+  /* Faint CRT scanlines + vignette over the whole app. */
+  .crt-scanlines::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 255, 156, 0.025) 3px,
+        rgba(0, 0, 0, 0) 4px
+      ),
+      radial-gradient(
+        ellipse at center,
+        rgba(0, 0, 0, 0) 60%,
+        rgba(0, 0, 0, 0.35) 100%
+      );
+  }
+
+  /* Blinking block caret, e.g. after the prompt heading. */
+  .caret::after {
+    content: '\2588';
+    margin-left: 1px;
+    color: #00ff9c;
+    animation: caret-blink 1.1s steps(1) infinite;
+  }
+  @keyframes caret-blink { 50% { opacity: 0; } }
+
+  /* Soft phosphor glow for accent headings. */
+  .glow {
+    text-shadow: 0 0 6px rgba(0, 255, 156, 0.45);
+  }
+}

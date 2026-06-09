@@ -29,8 +29,8 @@ function Slot({ slot }) {
       style={{ WebkitAppRegion: 'no-drag' }}
       className="flex-1 rounded-lg bg-black/50 border border-white/[0.08] px-2.5 py-1.5 flex flex-col justify-between cursor-pointer hover:bg-black/65 active:scale-[0.97] transition-all select-none"
     >
-      <p className="text-white/45 text-[10px] leading-none truncate">{slot.service_name}</p>
-      <p className="text-white font-semibold text-sm leading-tight truncate">{formatValue(slot)}</p>
+      <p className="text-emerald-400/50 text-[10px] leading-none truncate">{slot.service_name}</p>
+      <p className="text-emerald-300 font-semibold text-sm leading-tight truncate">{formatValue(slot)}</p>
       <p className="text-white/35 text-[9px] leading-none truncate">
         {slot.label_override || slot.metric_label || slot.metric_key}
       </p>
@@ -60,10 +60,14 @@ function OverlayInner() {
   return (
     <div
       className="w-full h-full rounded-xl flex flex-col px-2 pt-1.5 pb-2"
-      style={{ WebkitAppRegion: 'drag', background: 'rgba(2, 6, 23, 0.92)' }}
+      style={{
+        WebkitAppRegion: 'drag',
+        background: 'rgba(5, 8, 5, 0.92)',
+        border: '1px solid rgba(0, 255, 156, 0.14)',
+      }}
     >
       <div className="flex justify-center mb-1.5">
-        <div className="w-5 h-0.5 rounded-full bg-white/[0.12] pointer-events-none" />
+        <div className="w-5 h-0.5 rounded-full bg-emerald-400/20 pointer-events-none" />
       </div>
 
       <div className="flex gap-1.5 flex-1">

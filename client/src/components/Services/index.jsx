@@ -22,7 +22,9 @@ export default function Services() {
 
   return (
     <div className="p-6 space-y-4">
-      <h2 className="text-xl font-semibold text-white">Services</h2>
+      <h2 className="text-xl font-semibold text-slate-100">
+        <span className="text-emerald-400 glow">&gt;</span> services
+      </h2>
 
       <div className="flex gap-2 flex-wrap">
         {['all', ...categories].map(cat => (
