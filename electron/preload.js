@@ -13,7 +13,11 @@ try {
     setLoginItem:     (enable) => ipcRenderer.invoke('set-login-item', enable),
     getOverlayEnabled: () => ipcRenderer.invoke('get-overlay-enabled'),
     setOverlayEnabled: (enable) => ipcRenderer.invoke('set-overlay-enabled', enable),
-    resizeOverlay:       (w, h) => ipcRenderer.send('resize-overlay', w, h),
+    overlayExpand:       (w, h)         => ipcRenderer.invoke('overlay-expand', w, h),
+    overlayRefit:        (w, h, anchor) => ipcRenderer.send('overlay-refit', w, h, anchor),
+    overlayCollapse:     (anchor)       => ipcRenderer.send('overlay-collapse', anchor),
+    overlayGetPosition:  ()     => ipcRenderer.invoke('overlay-get-position'),
+    overlayMove:         (x, y, w, h, anchor) => ipcRenderer.send('overlay-move', x, y, w, h, anchor),
     notifyWidgetUpdate:  ()     => ipcRenderer.send('widget-updated'),
     onWidgetUpdate: (cb) => {
       const handler = () => cb();

@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DevCost Overlay</title>
+    <!-- Overlay window is transparent; keep the document transparent so the
+         rounded, shadowed card reads as a floating panel (the shared index.css
+         paints body #050805, which would otherwise fill the window as a rectangle). -->
+    <style>
+      html, body, #overlay-root { background: transparent !important; margin: 0; height: 100%; overflow: hidden; }
+      /* Slow breathing glow so the collapsed dock-orb reads as a live, tappable
+         status light rather than a static button. */
+      @keyframes devcost-fab-breathe {
+        0%, 100% { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 255, 156, 0.20), 0 0 9px rgba(0, 255, 156, 0.18); }
+        50%      { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 255, 156, 0.32), 0 0 18px rgba(0, 255, 156, 0.42); }
+      }
+    </style>
   </head>
   <body>
     <div id="overlay-root"></div>

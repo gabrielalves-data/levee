@@ -10,7 +10,14 @@ const fs     = require('fs');
 const http   = require('http');
 const net    = require('net');
 const { spawn } = require('child_process');
-const { createOverlay, getOverlay } = require('./overlay');
+const {
+  createOverlay,
+  getOverlay,
+  PILL,
+  clampToWorkArea,
+  anchoredPanelBounds,
+  pillBoundsFor,
+} = require('./overlay');
 
 let keytar;
 try { keytar = require('keytar'); } catch { keytar = null; }
@@ -226,16 +233,6 @@ app.whenReady().then(async () => {
   const ov = createOverlay(preloadPath);
   if (getConfig().overlayEnabled !== true) ov.hide();
 
-  // Persist overlay position after the user drags it.
-  let moveTimer = null;
-  ov.on('moved', () => {
-    clearTimeout(moveTimer);
-    moveTimer = setTimeout(() => {
-      const [x, y] = ov.getPosition();
-      try { fs.writeFileSync(boundsPath(), JSON.stringify({ x, y })); } catch {}
-    }, 200);
-  });
-
   globalShortcut.register('CommandOrControl+Shift+G', toggleOverlay);
 });
 
@@ -268,9 +265,76 @@ ipcMain.handle('set-overlay-enabled', (_e, enable) => {
   return true;
 });
 
-ipcMain.on('resize-overlay', (_e, width, height) => {
+// Persist the FAB (collapsed pill) origin — the single source of truth for the
+// overlay's position. The panel is always derived from it, so saving the pill
+// keeps a restart restoring the dot exactly where the user left it.
+function savePillOrigin(p) {
+  try { fs.writeFileSync(boundsPath(), JSON.stringify({ x: p.x, y: p.y })); } catch {}
+}
+
+// Pill → panel: choose the anchor (which corner stays pinned) from the FAB's
+// position so the panel opens toward the screen interior and never overflows.
+// Returns the anchor so the renderer can match its morph origin and FAB corner.
+ipcMain.handle('overlay-expand', (_e, w, h) => {
   const ov = getOverlay();
-  if (ov && !ov.isDestroyed()) ov.setSize(Math.round(width), Math.round(height));
+  if (!ov || ov.isDestroyed()) return { h: 'left', v: 'top' };
+  const b = ov.getBounds();
+  const { bounds, anchor } = anchoredPanelBounds(b.x, b.y, Math.round(w), Math.round(h));
+  ov.setBounds(bounds);
+  savePillOrigin(pillBoundsFor(bounds, anchor));
+  return anchor;
+});
+
+// Panel width change while open: keep the anchored (FAB) corner fixed.
+ipcMain.on('overlay-refit', (_e, w, h, anchor) => {
+  const ov = getOverlay();
+  if (!ov || ov.isDestroyed()) return;
+  const b = ov.getBounds();
+  const nw = Math.round(w), nh = Math.round(h);
+  const x = anchor.h === 'left' ? b.x : b.x + b.width  - nw;
+  const y = anchor.v === 'top'  ? b.y : b.y + b.height - nh;
+  const bounds = clampToWorkArea({ x, y, width: nw, height: nh });
+  ov.setBounds(bounds);
+  savePillOrigin(pillBoundsFor(bounds, anchor));
+});
+
+// Panel → pill: collapse to the anchored corner so the FAB stays where it sat.
+ipcMain.on('overlay-collapse', (_e, anchor) => {
+  const ov = getOverlay();
+  if (!ov || ov.isDestroyed()) return;
+  const pill = pillBoundsFor(ov.getBounds(), anchor);
+  ov.setBounds(pill);
+  savePillOrigin(pill);
+});
+
+// The overlay is non-focusable, so the native `-webkit-app-region: drag` region
+// can't move it on Windows. The renderer drives the drag manually: it reads the
+// current position once, then streams new positions while the grip is held.
+ipcMain.handle('overlay-get-position', () => {
+  const ov = getOverlay();
+  return ov && !ov.isDestroyed() ? ov.getPosition() : [0, 0];
+});
+
+let overlayMoveTimer = null;
+ipcMain.on('overlay-move', (_e, x, y, w, h, anchor) => {
+  const ov = getOverlay();
+  if (!ov || ov.isDestroyed()) return;
+  // Pin an explicit size each move and clamp to the work area: on Windows with
+  // fractional display scaling, repeatedly calling setPosition on a transparent
+  // frameless window accumulates rounding error and slowly inflates it; clamping
+  // also guarantees neither the FAB nor the panel can be dragged off-screen.
+  const cur = ov.getBounds();
+  const width  = Math.round(w) || cur.width;
+  const height = Math.round(h) || cur.height;
+  const bounds = clampToWorkArea({ x: Math.round(x), y: Math.round(y), width, height });
+  ov.setBounds(bounds);
+  // Convert the (possibly panel-sized) bounds back to the pill origin before
+  // persisting, so the saved position is always the FAB corner.
+  const pill = width <= PILL
+    ? { x: bounds.x, y: bounds.y }
+    : pillBoundsFor(bounds, anchor || { h: 'left', v: 'top' });
+  clearTimeout(overlayMoveTimer);
+  overlayMoveTimer = setTimeout(() => savePillOrigin(pill), 200);
 });
 
 ipcMain.on('widget-updated', () => {
