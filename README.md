@@ -57,6 +57,7 @@ all other outbound requests.
 | `planetscale`    | PlanetScale       | apiKey          |
 | `cloudflare`     | Cloudflare        | apiKey          |
 | `linear`         | Linear            | apiKey          |
+| `claude_plan`    | Claude Pro/Max plan usage | localOAuth (reads Claude Code's token) |
 
 ## Security model
 
@@ -66,6 +67,7 @@ all other outbound requests.
 - DB file and directory have restrictive OS permissions (0600 / 0700)
 - API secrets stored in OS keychain via keytar — never written to SQLite or exports
 - Connector HTTP client enforces a per-connector hostname allowlist; no other outbound calls permitted
+- `localOAuth` connectors read a token another app already stores locally (explicit per-service consent required); the token is held in memory only during sync and never persisted
 
 ## Global hotkey
 

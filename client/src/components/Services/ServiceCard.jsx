@@ -1,5 +1,5 @@
 import * as Icons from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMetrics, useUpsertMetric } from '../../hooks/useMetrics'
 import { useSnapshots } from '../../hooks/useSnapshots'
 import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
@@ -240,16 +240,27 @@ function ApiPanel({ service }) {
   const { allowed } = useAllowOutbound()
   const [providerKey, setProviderKey] = useState('')
   const [token, setToken] = useState('')
+  const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
 
   const isApiConnected = service.connector_type === 'api'
 
+  const selected = providers.find(p => p.provider_key === providerKey)
+  const isLocalOAuth = selected?.authType === 'localOAuth'
+
+  // Reset consent whenever the chosen provider changes.
+  useEffect(() => { setConsent(false) }, [providerKey])
+
   async function handleSave() {
-    if (!providerKey || !token) return
+    if (!providerKey || (isLocalOAuth ? !consent : !token)) return
     setError('')
     try {
-      await upsert.mutateAsync({ serviceId: service.id, providerKey, secret: token })
-      setToken('')
+      if (isLocalOAuth) {
+        await upsert.mutateAsync({ serviceId: service.id, providerKey, config: { consentLocalToken: true } })
+      } else {
+        await upsert.mutateAsync({ serviceId: service.id, providerKey, secret: token })
+        setToken('')
+      }
     } catch {
       setError('Failed to save connector')
     }
@@ -277,17 +288,34 @@ function ApiPanel({ service }) {
                 <option key={p.provider_key} value={p.provider_key}>{p.label}</option>
               ))}
             </select>
-            <input
-              type="password"
-              placeholder="API token"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
-            />
+            {isLocalOAuth ? (
+              <>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Reads the OAuth token Claude Code stores on this machine to fetch your plan usage % (read-only, same data as claude.ai/settings/usage). The token is never copied or stored by DevCost. Unofficial endpoint — may stop working.
+                </p>
+                <label className="flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={e => setConsent(e.target.checked)}
+                    className="mt-0.5 accent-indigo-500"
+                  />
+                  <span>I consent to DevCost reading Claude Code's local token</span>
+                </label>
+              </>
+            ) : (
+              <input
+                type="password"
+                placeholder="API token"
+                value={token}
+                onChange={e => setToken(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+              />
+            )}
             {error && <p className="text-xs text-red-400">{error}</p>}
             <button
               onClick={handleSave}
-              disabled={!providerKey || !token || upsert.isPending}
+              disabled={!providerKey || (isLocalOAuth ? !consent : !token) || upsert.isPending}
               className={BTN_PRIMARY}
             >
               {upsert.isPending ? 'Saving…' : 'Save & Connect'}

@@ -21,11 +21,12 @@
  * tier           {string}
  *   Always 'api' for Tier-2 connectors (live API pull).
  *
- * authType       {'apiKey' | 'awsKeyPair' | 'oauth'}
+ * authType       {'apiKey' | 'awsKeyPair' | 'oauth' | 'localOAuth'}
  *   Tells the UI which credential form to render.
  *     apiKey     — single secret, e.g. an API token
  *     awsKeyPair — access key ID + secret access key pair
  *     oauth      — OAuth bearer token (refresh flow TBD)
+ *     localOAuth — reads a token another local app already stores; no secret entry in UI, requires config.consentLocalToken === true
  *
  * secretAccounts {string[]}
  *   The <name> portion of each OS keychain account this connector uses.
@@ -100,6 +101,7 @@ module.exports = { registry, register, get, list };
 
 // Self-registering connectors — each module calls register() on load.
 require('./anthropic_api');
+require('./claude_plan');
 require('./openai_api');
 require('./aws_cost');
 require('./github_copilot');

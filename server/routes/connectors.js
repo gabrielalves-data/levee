@@ -20,6 +20,14 @@ router.put('/:serviceId', async (req, res) => {
 
   if (!providerKey) return res.status(400).json({ error: 'providerKey required' });
 
+  const def = getConnector(providerKey);
+  if (!def) return res.status(400).json({ error: `Unknown provider: ${providerKey}` });
+  if (def.authType === 'localOAuth' && config?.consentLocalToken !== true) {
+    return res.status(400).json({
+      error: 'This connector reads a locally stored token from another app. Explicit consent (config.consentLocalToken=true) is required.',
+    });
+  }
+
   const svc = db.prepare('SELECT id FROM services WHERE id = ?').get(serviceId);
   if (!svc) return res.status(404).json({ error: 'Service not found' });
 

@@ -72,6 +72,13 @@ const {
   connector: linearConnector,
 } = require('./linear');
 
+const {
+  mapUsageResponse: claudePlanMapUsage,
+  _setFetchForTest: claudePlanSetFetch,
+  _setTokenReaderForTest: claudePlanSetTokenReader,
+  connector: claudePlanConnector,
+} = require('./claude_plan');
+
 // Guard: tests must never hit real network.
 before(() => {
   anthropicSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
@@ -84,6 +91,7 @@ before(() => {
   psSetFetch(async       () => { throw new Error('[test] no real HTTP allowed'); });
   cfSetFetch(async       () => { throw new Error('[test] no real HTTP allowed'); });
   linearSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
+  claudePlanSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
 });
 
 // ─── Anthropic ────────────────────────────────────────────────────────────────
@@ -1059,5 +1067,92 @@ describe('linear — connector.fetch (mocked HTTP)', () => {
         return true;
       }
     );
+  });
+});
+
+// ─── Claude Plan (local OAuth) ──────────────────────────────────────────────────
+
+const claudePlanFullBody = {
+  five_hour:      { utilization: 34, resets_at: '2026-06-10T18:00:00Z' },
+  seven_day:      { utilization: 61, resets_at: '2026-06-14T00:00:00Z' },
+  seven_day_opus: { utilization: 12, resets_at: '2026-06-14T00:00:00Z' },
+};
+
+describe('claude_plan — mapUsageResponse', () => {
+  it('maps a full body to 4 metrics with correct keys and values', () => {
+    const metrics = claudePlanMapUsage(claudePlanFullBody);
+    assert.equal(metrics.length, 4);
+
+    const session = metrics.find(m => m.metric_key === 'session_pct');
+    assert.equal(session.value_num,  34);
+    assert.equal(session.value_type, 'percent');
+    assert.equal(session.unit,       '%');
+
+    const weekly = metrics.find(m => m.metric_key === 'weekly_pct');
+    assert.equal(weekly.value_num, 61);
+
+    const opus = metrics.find(m => m.metric_key === 'weekly_opus_pct');
+    assert.equal(opus.value_num, 12);
+
+    const reset = metrics.find(m => m.metric_key === 'weekly_reset_at');
+    assert.equal(reset.value_type, 'date');
+    assert.equal(reset.value_text, '2026-06-14T00:00:00Z');
+  });
+
+  it('emits a single metric when only five_hour is present', () => {
+    const metrics = claudePlanMapUsage({ five_hour: { utilization: 50 } });
+    assert.equal(metrics.length, 1);
+    assert.equal(metrics[0].metric_key, 'session_pct');
+    assert.equal(metrics[0].value_num,  50);
+  });
+
+  it('throws on an empty body (no recognizable data)', () => {
+    assert.throws(() => claudePlanMapUsage({}), /no recognizable data/);
+  });
+
+  it('never emits a monthly_bill metric', () => {
+    const metrics = claudePlanMapUsage(claudePlanFullBody);
+    assert.equal(metrics.some(m => m.metric_key === 'monthly_bill'), false);
+  });
+});
+
+describe('claude_plan — connector.fetch (mocked HTTP + token reader)', () => {
+  it('reads the token, sends OAuth headers, and returns metrics', async () => {
+    claudePlanSetTokenReader(async () => 'tok_test');
+    let seenInit = null;
+    claudePlanSetFetch(async (url, opts, init) => {
+      seenInit = init;
+      return { ok: true, status: 200, json: async () => claudePlanFullBody };
+    });
+
+    const metrics = await claudePlanConnector.fetch();
+    assert.equal(metrics.length, 4);
+    assert.equal(seenInit.headers.Authorization, 'Bearer tok_test');
+    assert.equal(seenInit.headers['anthropic-beta'], 'oauth-2025-04-20');
+  });
+
+  it('throws a clean error (no token leak) on a 401 response', async () => {
+    claudePlanSetTokenReader(async () => 'tok_test');
+    claudePlanSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => claudePlanConnector.fetch(),
+      (err) => {
+        assert.doesNotMatch(err.message, /tok_test/);
+        return true;
+      }
+    );
+  });
+
+  it('propagates the expired-token error from the token reader', async () => {
+    const expiredMsg = 'Claude Code OAuth token is expired. Open Claude Code to refresh it, then sync again.';
+    claudePlanSetTokenReader(async () => { throw new Error(expiredMsg); });
+    await assert.rejects(() => claudePlanConnector.fetch(), /token is expired/);
+  });
+});
+
+describe('claude_plan — connector shape', () => {
+  it('owns no DevCost secret accounts and locks to the Anthropic host', () => {
+    assert.deepEqual(claudePlanConnector.secretAccounts, []);
+    assert.deepEqual(claudePlanConnector.hosts, ['api.anthropic.com']);
   });
 });
