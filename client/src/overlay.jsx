@@ -13,7 +13,12 @@ const queryClient = new QueryClient({
 const WINDOW_W = [172, 204, 308, 396, 472]
 const WINDOW_H = 84
 // Collapsed (minimized) window — a small dock-dot the overlay tucks into.
-const PILL = 28
+// The window (PILL) is larger than the visible orb (ORB) so the GUTTER of
+// transparent pixels around it gives the full circle + an OUTER glow room to
+// render without being clipped to the square window rectangle.
+const ORB = 26
+const GUTTER = 6
+const PILL = ORB + GUTTER * 2 // 38
 
 function formatValue(slot) {
   if (!slot.service_id) return '—'
@@ -47,6 +52,10 @@ function Slot({ slot }) {
 const CARD_SHADOW =
   '0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 255, 156, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.04)'
 const CARD_BG = 'rgba(5, 8, 5, 0.78)'
+
+// Dock-orb chrome. A simple dark circle with a crisp green outline — no glow, so
+// it never blooms into a clipped green square at the window edge.
+const FAB_BG = 'rgba(1, 10, 7, 0.92)'
 
 // Collapse/expand animation length. The window stays panel-sized for this whole
 // window so the morph has room; only then does it snap to/from the pill bounds.
@@ -174,11 +183,15 @@ function OverlayInner() {
   // The FAB sits in the anchored corner and both forms morph from/into it, so the
   // panel grows away from the nearest screen edge.
   const morphOrigin = `${anchor.h === 'left' ? '0%' : '100%'} ${anchor.v === 'top' ? '0%' : '100%'}`
+  // Inset the orb by GUTTER from the anchored corner so it sits centred in the
+  // collapsed PILL window (PILL = ORB + 2·GUTTER), leaving the transparent gutter
+  // around it for the glow. During the morph the window is panel-sized, so this
+  // still reads as the orb emerging from / collapsing into the corner.
   const fabCorner = {
-    top:    anchor.v === 'top'    ? 0 : undefined,
-    bottom: anchor.v === 'bottom' ? 0 : undefined,
-    left:   anchor.h === 'left'   ? 0 : undefined,
-    right:  anchor.h === 'right'  ? 0 : undefined,
+    top:    anchor.v === 'top'    ? GUTTER : undefined,
+    bottom: anchor.v === 'bottom' ? GUTTER : undefined,
+    left:   anchor.h === 'left'   ? GUTTER : undefined,
+    right:  anchor.h === 'right'  ? GUTTER : undefined,
   }
 
   return (
@@ -195,15 +208,12 @@ function OverlayInner() {
         className="absolute flex items-center justify-center rounded-full text-emerald-300 hover:scale-110 active:scale-95 select-none"
         style={{
           ...fabCorner,
-          width: PILL, height: PILL,
-          background:
-            'radial-gradient(circle at 50% 36%, rgba(0, 255, 156, 0.22), rgba(5, 8, 5, 0.86) 72%)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(0, 255, 156, 0.22)',
-          // Breathe only when the orb is the resting form; during the morph the
-          // transform/opacity transition owns the look.
-          animation: phase === 'minimized' ? 'devcost-fab-breathe 3.2s ease-in-out infinite' : undefined,
-          boxShadow: CARD_SHADOW,
+          width: ORB, height: ORB,
+          // Force a true circle: the Matrix theme overrides `rounded-full` to a
+          // sharp 2px, which would render this status orb as a square.
+          borderRadius: '50%',
+          background: FAB_BG,
+          border: '1.5px solid rgba(0, 255, 156, 0.8)',
           transformOrigin: morphOrigin,
           transition: morph,
           transform: panelOut ? 'scale(0.35)' : 'scale(1)',
@@ -211,7 +221,7 @@ function OverlayInner() {
           pointerEvents: panelOut ? 'none' : 'auto',
         }}
       >
-        <Activity size={13} style={{ filter: 'drop-shadow(0 0 4px rgba(0, 255, 156, 0.6))' }} />
+        <Activity size={12} />
       </button>
 
       {/* Panel — grows out of / shrinks into that same corner. */}
