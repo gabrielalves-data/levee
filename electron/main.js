@@ -261,7 +261,21 @@ ipcMain.handle('set-overlay-enabled', (_e, enable) => {
   cfg.overlayEnabled = !!enable;
   saveConfig(cfg);
   const ov = getOverlay();
-  if (ov && !ov.isDestroyed()) enable ? ov.show() : ov.hide();
+  if (ov && !ov.isDestroyed()) {
+    if (enable) {
+      // Show first, then tell the renderer to play the scale/fade-in.
+      ov.show();
+      ov.webContents.send('overlay-visibility', true);
+    } else {
+      // Let the renderer play the exit animation, then hide the window — but
+      // re-check state at fire time so a quick re-enable cancels the hide.
+      ov.webContents.send('overlay-visibility', false);
+      setTimeout(() => {
+        const o = getOverlay();
+        if (o && !o.isDestroyed() && getConfig().overlayEnabled !== true) o.hide();
+      }, 320);
+    }
+  }
   return true;
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Minimize2, Activity } from 'lucide-react'
@@ -57,13 +58,23 @@ const CARD_BG = 'rgba(5, 8, 5, 0.78)'
 // it never blooms into a clipped green square at the window edge.
 const FAB_BG = 'rgba(1, 10, 7, 0.92)'
 
-// Collapse/expand animation length. The window stays panel-sized for this whole
-// window so the morph has room; only then does it snap to/from the pill bounds.
-const MORPH_MS = 280
-const MORPH_EASE = 'cubic-bezier(0.34, 1.4, 0.5, 1)'
-
 // Pointer travel (px) below which a header press counts as a click, not a drag.
 const DRAG_THRESHOLD = 4
+
+// Drive a phase flip through a same-document View Transition so the browser
+// morphs the panel into the dock-orb (they share `view-transition-name: dock`),
+// making the panel look like it folds inside the FAB. `flushSync` forces React to
+// commit the new DOM before the browser captures the "new" snapshot. Degrades to
+// an instant swap when the API is unavailable or the user prefers reduced motion.
+// Easing/duration of the morph live in index.css (::view-transition-group(dock)).
+function morphPhase(update) {
+  if (!document.startViewTransition ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    update()
+    return Promise.resolve()
+  }
+  return document.startViewTransition(() => flushSync(update)).finished
+}
 
 // Manual window drag: the overlay window is non-focusable, so the native
 // `-webkit-app-region: drag` region can't move it on Windows. We capture the
@@ -105,18 +116,20 @@ async function startOverlayDrag(e, size, onTap, anchor) {
 }
 
 function OverlayInner() {
-  // phase: open → collapsing → minimized → expanding → open.
-  // The window only shrinks to PILL once fully `minimized`, and grows back to
-  // panel size the instant we start `expanding`, so the morph always has room.
+  // phase: 'open' (panel) ⇄ 'minimized' (dock-orb). The browser's View Transition
+  // owns the morph between them; the window only shrinks to PILL once minimized,
+  // and grows back to panel size before expanding, so the morph always has room.
   const [phase, setPhase] = useState('open')
-  // Drives the enter side of the morph: set false for one frame after a phase
-  // flip so CSS sees a transition into the new resting state.
-  const [settled, setSettled] = useState(true)
   // Which corner the panel anchors to (decided by the main process from the
   // FAB's screen position) so it opens toward the interior and never overflows.
   // The ref mirrors it for use inside drag/collapse callbacks without staleness.
   const [anchor, setAnchor] = useState({ h: 'left', v: 'top' })
   const anchorRef = useRef(anchor)
+  // Whether the FAB is shown. Settings' enable/disable toggles drive an
+  // `overlay-visibility` IPC event; we scale+fade the whole overlay from/into the
+  // anchored corner so it materialises rather than popping. The main process delays
+  // hiding the window until the exit animation has had time to play.
+  const [visible, setVisible] = useState(true)
 
   const { data: slots = [], refetch } = useQuery({
     queryKey: ['widget'],
@@ -132,12 +145,44 @@ function OverlayInner() {
     return () => cleanup?.()
   }, [refetch])
 
+  // Enable → scale/fade in from the corner; disable → scale/fade out. The window is
+  // already shown before an `enter` arrives, so RAF runs and the in-animation plays.
+  useEffect(() => {
+    const cleanup = window.devcost?.onOverlayVisibility?.((show) => {
+      if (show) {
+        setVisible(false)
+        requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
+      } else {
+        setVisible(false)
+      }
+    })
+    return () => cleanup?.()
+  }, [])
+
   // Size, position and anchor the panel. `animate` plays the open morph (FAB
   // tap); the silent variant just lays the panel out (initial mount).
+  // Point the panel's scale-into-corner morph at the anchored corner (where the
+  // FAB sits), so it folds toward the orb rather than the window centre.
+  const setVtOrigin = (a) => {
+    document.documentElement.style.setProperty(
+      '--vt-origin',
+      `${a.h === 'left' ? '0%' : '100%'} ${a.v === 'top' ? '0%' : '100%'}`,
+    )
+  }
+
   const expand = async (animate) => {
     const a = await window.devcost?.overlayExpand?.(panelW, WINDOW_H)
     if (a) { anchorRef.current = a; setAnchor(a) }
-    if (animate) setPhase('expanding')
+    if (animate) { setVtOrigin(anchorRef.current); morphPhase(() => setPhase('open')) }
+  }
+
+  // Fold the panel into the dock-orb, then shrink the window to the PILL at the
+  // anchored corner so the FAB lands exactly where it visually came to rest.
+  const collapse = async () => {
+    if (phase !== 'open') return
+    setVtOrigin(anchorRef.current)
+    await morphPhase(() => setPhase('minimized'))
+    window.devcost?.overlayCollapse?.(anchorRef.current)
   }
 
   // Lay out the restored panel once on mount (the window opens in `open` phase).
@@ -151,38 +196,6 @@ function OverlayInner() {
     if (phase === 'open') window.devcost?.overlayRefit?.(panelW, WINDOW_H, anchorRef.current)
   }, [panelW]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // After a transient phase flip, flush a frame with `settled=false` (the
-  // "from" state) then flip to true so the morph animates, and advance to the
-  // resting phase when it finishes.
-  useEffect(() => {
-    if (phase !== 'collapsing' && phase !== 'expanding') return
-    setSettled(false)
-    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setSettled(true)))
-    const done = setTimeout(() => {
-      if (phase === 'collapsing') {
-        // Morph is done; now shrink the window to the pill at the anchored
-        // corner so the FAB lands exactly where it visually came to rest.
-        window.devcost?.overlayCollapse?.(anchorRef.current)
-        setPhase('minimized')
-      } else {
-        setPhase('open')
-      }
-    }, MORPH_MS)
-    return () => { cancelAnimationFrame(raf); clearTimeout(done) }
-  }, [phase])
-
-  // Whether the panel (vs. the pill) is the visible/resting form for this frame.
-  const panelOut =
-    phase === 'open'       ? true
-    : phase === 'collapsing' ? !settled   // start expanded, settle into pill
-    : phase === 'expanding'  ? settled    // start as pill, settle into panel
-    : false                               // minimized
-
-  const morph = `transform ${MORPH_MS}ms ${MORPH_EASE}, opacity ${MORPH_MS}ms ease`
-
-  // The FAB sits in the anchored corner and both forms morph from/into it, so the
-  // panel grows away from the nearest screen edge.
-  const morphOrigin = `${anchor.h === 'left' ? '0%' : '100%'} ${anchor.v === 'top' ? '0%' : '100%'}`
   // Inset the orb by GUTTER from the anchored corner so it sits centred in the
   // collapsed PILL window (PILL = ORB + 2·GUTTER), leaving the transparent gutter
   // around it for the glow. During the morph the window is panel-sized, so this
@@ -194,8 +207,20 @@ function OverlayInner() {
     right:  anchor.h === 'right'  ? GUTTER : undefined,
   }
 
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const showOrigin = `${anchor.h === 'left' ? '0%' : '100%'} ${anchor.v === 'top' ? '0%' : '100%'}`
+
   return (
-    <div className="relative w-full h-full overflow-visible" style={{ WebkitAppRegion: 'no-drag' }}>
+    <div
+      className="relative w-full h-full overflow-visible"
+      style={{
+        WebkitAppRegion: 'no-drag',
+        transformOrigin: showOrigin,
+        transition: reduceMotion ? 'none' : 'transform 300ms cubic-bezier(0.34, 1.4, 0.5, 1), opacity 220ms ease',
+        transform: visible ? 'scale(1)' : 'scale(0.4)',
+        opacity: visible ? 1 : 0,
+      }}
+    >
       {/* Dock-orb — pinned to the anchored corner the window collapses toward, so
           it lands exactly where the resized PILL window will sit. Emerald radial
           fill + breathing glow so it reads as a live status light, not a button. */}
@@ -214,25 +239,22 @@ function OverlayInner() {
           borderRadius: '50%',
           background: FAB_BG,
           border: '1.5px solid rgba(0, 255, 156, 0.8)',
-          transformOrigin: morphOrigin,
-          transition: morph,
-          transform: panelOut ? 'scale(0.35)' : 'scale(1)',
-          opacity: panelOut ? 0 : 1,
-          pointerEvents: panelOut ? 'none' : 'auto',
+          // Distinct transition name from the panel: the orb just fades in/out at
+          // its real 26px size, so it never gets stretched into the panel's box.
+          viewTransitionName: phase === 'minimized' ? 'ov-fab' : 'none',
+          display: phase === 'minimized' ? 'flex' : 'none',
         }}
       >
         <Activity size={12} />
       </button>
 
-      {/* Panel — grows out of / shrinks into that same corner. */}
+      {/* Panel — scales uniformly into / out of the anchored corner (where the FAB
+          sits) via its own `ov-panel` morph, so it reads as folding inside the FAB. */}
       <div
         className="group absolute inset-0 p-1.5"
         style={{
-          transformOrigin: morphOrigin,
-          transition: morph,
-          transform: panelOut ? 'scale(1)' : 'scale(0.15)',
-          opacity: panelOut ? 1 : 0,
-          pointerEvents: panelOut && phase === 'open' ? 'auto' : 'none',
+          viewTransitionName: phase === 'open' ? 'ov-panel' : 'none',
+          display: phase === 'open' ? undefined : 'none',
         }}
       >
         <div
@@ -249,7 +271,7 @@ function OverlayInner() {
               the same press drags. The grip + minimize glyph are hints only. */}
           <div
             onPointerDown={(e) =>
-              startOverlayDrag(e, [panelW, WINDOW_H], () => phase === 'open' && setPhase('collapsing'), anchorRef.current)
+              startOverlayDrag(e, [panelW, WINDOW_H], collapse, anchorRef.current)
             }
             title="Click to minimize · drag to move"
             className="relative flex justify-center items-center h-4 mb-0.5 cursor-pointer active:cursor-grabbing group/grip select-none"

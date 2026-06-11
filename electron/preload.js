@@ -36,6 +36,11 @@ try {
       ipcRenderer.on('navigate', handler);
       return () => ipcRenderer.removeListener('navigate', handler);
     },
+    onOverlayVisibility: (cb) => {
+      const handler = (_event, show) => cb(show);
+      ipcRenderer.on('overlay-visibility', handler);
+      return () => ipcRenderer.removeListener('overlay-visibility', handler);
+    },
   });
   console.log('[preload] devcost exposed OK');
 } catch (err) {

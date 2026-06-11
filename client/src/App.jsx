@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Grid2X2, Settings } from 'lucide-react'
@@ -16,7 +17,29 @@ const NAV = [
   { to: '/settings', label: 'settings', Icon: Settings },
 ]
 
+// Declarative <BrowserRouter> ignores React Router's `viewTransition` nav option
+// (it only works with data/framework routers), so we wrap the navigation in a
+// view transition ourselves — `flushSync` commits the route change before the
+// browser captures the "new" snapshot, exactly like the overlay morph.
+let activeViewTransition = null
+function useViewTransitionNavigate() {
+  const navigate = useNavigate()
+  return (to) => {
+    if (!document.startViewTransition ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      navigate(to)
+      return
+    }
+    // Cut a still-running transition short so a quick second click navigates
+    // immediately instead of waiting for the first animation to finish.
+    activeViewTransition?.skipTransition()
+    activeViewTransition = document.startViewTransition(() => flushSync(() => navigate(to)))
+    activeViewTransition.finished.finally(() => { activeViewTransition = null })
+  }
+}
+
 function Sidebar() {
+  const vtNavigate = useViewTransitionNavigate()
   return (
     <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
       <div className="px-4 py-5 border-b border-slate-800">
@@ -34,6 +57,7 @@ function Sidebar() {
             key={to}
             to={to}
             end={to === '/'}
+            onClick={(e) => { e.preventDefault(); vtNavigate(to) }}
             className={({ isActive }) =>
               `flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-l-2 ${
                 isActive
@@ -64,11 +88,11 @@ function Sidebar() {
 
 // Listens for IPC-driven navigation events (e.g. clicking a slot in the overlay).
 function NavigationListener() {
-  const navigate = useNavigate()
+  const vtNavigate = useViewTransitionNavigate()
   useEffect(() => {
     if (!window.devcost?.onNavigate) return
-    return window.devcost.onNavigate((route) => navigate(route))
-  }, [navigate])
+    return window.devcost.onNavigate((route) => vtNavigate(route))
+  }, [vtNavigate])
   return null
 }
 
@@ -77,9 +101,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <NavigationListener />
-        <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden crt-scanlines">
+        <div className="app-shell flex h-screen bg-slate-950 text-slate-200 overflow-hidden crt-scanlines">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 overflow-y-auto" style={{ viewTransitionName: 'page' }}>
             <Routes>
               <Route path="/"         element={<Overview />} />
               <Route path="/services" element={<Services />} />

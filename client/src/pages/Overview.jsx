@@ -89,7 +89,7 @@ function QuickAddForm({ onDone }) {
   }
 
   return (
-    <form onSubmit={submit} className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+    <form onSubmit={submit} className="vt-pop bg-slate-800 rounded-xl p-5 border border-slate-700">
       <h3 className="text-sm font-semibold text-white mb-4">Quick Add Service</h3>
       <div className="grid grid-cols-2 gap-3 mb-4">
         <label className="space-y-1">
