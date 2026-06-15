@@ -79,6 +79,50 @@ const {
   connector: claudePlanConnector,
 } = require('./claude_plan');
 
+const {
+  mapCreditsResponse: openrouterMapCredits,
+  _setFetchForTest: openrouterSetFetch,
+  connector: openrouterConnector,
+} = require('./openrouter');
+
+const {
+  mapBalanceResponse: doMapBalance,
+  _setFetchForTest: doSetFetch,
+  connector: doConnector,
+} = require('./digitalocean');
+
+const {
+  mapUsageResponse: twilioMapUsage,
+  mapBalanceResponse: twilioMapBalance,
+  _setFetchForTest: twilioSetFetch,
+  connector: twilioConnector,
+} = require('./twilio');
+
+const {
+  mapBalanceResponse: deepseekMapBalance,
+  _setFetchForTest: deepseekSetFetch,
+  connector: deepseekConnector,
+} = require('./deepseek');
+
+const {
+  mapEstimatedCost: datadogMapCost,
+  _setFetchForTest: datadogSetFetch,
+  connector: datadogConnector,
+} = require('./datadog');
+
+const {
+  mapInvoiceResponse: atlasMapInvoice,
+  parseDigestChallenge: atlasParseChallenge,
+  _setFetchForTest: atlasSetFetch,
+  connector: atlasConnector,
+} = require('./mongodb_atlas');
+
+const {
+  mapQueryResponse: azureMapQuery,
+  _setFetchForTest: azureSetFetch,
+  connector: azureConnector,
+} = require('./azure');
+
 // Guard: tests must never hit real network.
 before(() => {
   anthropicSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
@@ -92,6 +136,13 @@ before(() => {
   cfSetFetch(async       () => { throw new Error('[test] no real HTTP allowed'); });
   linearSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
   claudePlanSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
+  openrouterSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
+  doSetFetch(async       () => { throw new Error('[test] no real HTTP allowed'); });
+  twilioSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
+  deepseekSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
+  datadogSetFetch(async  () => { throw new Error('[test] no real HTTP allowed'); });
+  atlasSetFetch(async    () => { throw new Error('[test] no real HTTP allowed'); });
+  azureSetFetch(async    () => { throw new Error('[test] no real HTTP allowed'); });
 });
 
 // ─── Anthropic ────────────────────────────────────────────────────────────────
@@ -1187,6 +1238,513 @@ describe('claude_plan — connector shape', () => {
   it('owns no Levee secret accounts and locks to the Anthropic host', () => {
     assert.deepEqual(claudePlanConnector.secretAccounts, []);
     assert.deepEqual(claudePlanConnector.hosts, ['api.anthropic.com']);
+  });
+});
+
+// ─── OpenRouter ───────────────────────────────────────────────────────────────
+
+describe('openrouter — mapCreditsResponse', () => {
+  it('returns lifetime spend and remaining credits', () => {
+    const { totalSpend, creditsRemaining } = openrouterMapCredits({
+      data: { total_credits: 50, total_usage: 12.5 },
+    });
+    assert.ok(Math.abs(totalSpend - 12.5) < 1e-10);
+    assert.ok(Math.abs(creditsRemaining - 37.5) < 1e-10);
+  });
+
+  it('returns zeros for empty body', () => {
+    const { totalSpend, creditsRemaining } = openrouterMapCredits({});
+    assert.equal(totalSpend, 0);
+    assert.equal(creditsRemaining, 0);
+  });
+});
+
+describe('openrouter — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    openrouterSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => openrouterConnector.fetch({ secrets: { apiKey: 'or_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns total_spend and credits_remaining from fixture data', async () => {
+    openrouterSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ data: { total_credits: 100, total_usage: 28.4 } }),
+    }));
+
+    const metrics = await openrouterConnector.fetch({ secrets: { apiKey: 'or_test' } });
+
+    const spend = metrics.find(m => m.metric_key === 'total_spend');
+    assert.ok(Math.abs(spend.value_num - 28.4) < 1e-10);
+    assert.equal(spend.unit, 'USD');
+
+    const credits = metrics.find(m => m.metric_key === 'credits_remaining');
+    assert.ok(Math.abs(credits.value_num - 71.6) < 1e-10);
+
+    // Lifetime totals must never roll into the monthly dashboard total.
+    assert.equal(metrics.some(m => m.metric_key === 'monthly_bill'), false);
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    openrouterSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => openrouterConnector.fetch({ secrets: { apiKey: 'or_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /or_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── DigitalOcean ─────────────────────────────────────────────────────────────
+
+describe('digitalocean — mapBalanceResponse', () => {
+  it('parses string amounts into MTD spend and account balance', () => {
+    const { monthlyBill, accountBalance } = doMapBalance({
+      month_to_date_usage: '23.44',
+      account_balance: '-5.00',
+    });
+    assert.ok(Math.abs(monthlyBill - 23.44) < 1e-10);
+    assert.ok(Math.abs(accountBalance - -5.00) < 1e-10);
+  });
+
+  it('returns zeros for empty body', () => {
+    const { monthlyBill, accountBalance } = doMapBalance({});
+    assert.equal(monthlyBill, 0);
+    assert.equal(accountBalance, 0);
+  });
+});
+
+describe('digitalocean — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    doSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => doConnector.fetch({ secrets: { apiKey: 'dop_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill and account_balance from fixture data', async () => {
+    doSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ month_to_date_usage: '41.10', account_balance: '0.00' }),
+    }));
+
+    const metrics = await doConnector.fetch({ secrets: { apiKey: 'dop_test' } });
+
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 41.10) < 1e-10);
+    assert.equal(bill.value_type, 'currency');
+    assert.equal(bill.unit, 'USD');
+  });
+
+  it('throws a clean error (no token) on non-200 response', async () => {
+    doSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => doConnector.fetch({ secrets: { apiKey: 'dop_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /dop_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Twilio ───────────────────────────────────────────────────────────────────
+
+describe('twilio — mapUsageResponse', () => {
+  it('reads the totalprice record price and currency', () => {
+    const { monthlyBill, currency } = twilioMapUsage({
+      usage_records: [{ category: 'totalprice', price: '7.85', price_unit: 'usd' }],
+    });
+    assert.ok(Math.abs(monthlyBill - 7.85) < 1e-10);
+    assert.equal(currency, 'USD');
+  });
+
+  it('returns zero for empty usage_records', () => {
+    const { monthlyBill } = twilioMapUsage({ usage_records: [] });
+    assert.equal(monthlyBill, 0);
+  });
+});
+
+describe('twilio — mapBalanceResponse', () => {
+  it('parses balance and uppercases currency', () => {
+    const { balance, currency } = twilioMapBalance({ balance: '12.00', currency: 'usd' });
+    assert.ok(Math.abs(balance - 12.00) < 1e-10);
+    assert.equal(currency, 'USD');
+  });
+});
+
+describe('twilio — connector.fetch (mocked HTTP)', () => {
+  it('throws when accountSid is missing from config', async () => {
+    await assert.rejects(
+      () => twilioConnector.fetch({ secrets: { apiKey: 'tw_test' }, config: {} }),
+      /accountSid/
+    );
+  });
+
+  it('propagates the allow_outbound gate error', async () => {
+    twilioSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => twilioConnector.fetch({ secrets: { apiKey: 'tw_test' }, config: { accountSid: 'ACxxx' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill and balance when both calls succeed', async () => {
+    twilioSetFetch(async (url) => {
+      if (url.includes('Usage/Records')) {
+        return { ok: true, json: async () => ({ usage_records: [{ price: '15.00', price_unit: 'usd' }] }) };
+      }
+      return { ok: true, json: async () => ({ balance: '4.50', currency: 'usd' }) };
+    });
+
+    const metrics = await twilioConnector.fetch({
+      secrets: { apiKey: 'tw_test' },
+      config:  { accountSid: 'ACxxx' },
+    });
+
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 15.00) < 1e-10);
+    assert.equal(bill.unit, 'USD');
+
+    const balance = metrics.find(m => m.metric_key === 'balance');
+    assert.ok(Math.abs(balance.value_num - 4.50) < 1e-10);
+  });
+
+  it('omits balance metric when the balance call fails', async () => {
+    twilioSetFetch(async (url) => {
+      if (url.includes('Usage/Records')) {
+        return { ok: true, json: async () => ({ usage_records: [{ price: '9.00', price_unit: 'usd' }] }) };
+      }
+      return { ok: false, status: 403, statusText: 'Forbidden' };
+    });
+
+    const metrics = await twilioConnector.fetch({
+      secrets: { apiKey: 'tw_test' },
+      config:  { accountSid: 'ACxxx' },
+    });
+    assert.equal(metrics.length, 1);
+    assert.equal(metrics[0].metric_key, 'monthly_bill');
+  });
+
+  it('throws a clean error (no token) when the usage call fails', async () => {
+    twilioSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => twilioConnector.fetch({ secrets: { apiKey: 'tw_secret' }, config: { accountSid: 'ACxxx' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /tw_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── DeepSeek ─────────────────────────────────────────────────────────────────
+
+describe('deepseek — mapBalanceResponse', () => {
+  it('reads the first balance_infos entry', () => {
+    const { balance, currency } = deepseekMapBalance({
+      balance_infos: [{ currency: 'USD', total_balance: '18.20' }],
+    });
+    assert.ok(Math.abs(balance - 18.20) < 1e-10);
+    assert.equal(currency, 'USD');
+  });
+
+  it('returns zero for empty balance_infos', () => {
+    const { balance } = deepseekMapBalance({ balance_infos: [] });
+    assert.equal(balance, 0);
+  });
+});
+
+describe('deepseek — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    deepseekSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => deepseekConnector.fetch({ secrets: { apiKey: 'ds_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns balance from fixture data and no monthly_bill', async () => {
+    deepseekSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ balance_infos: [{ currency: 'USD', total_balance: '33.33' }] }),
+    }));
+
+    const metrics = await deepseekConnector.fetch({ secrets: { apiKey: 'ds_test' } });
+    assert.equal(metrics.length, 1);
+    assert.equal(metrics[0].metric_key, 'balance');
+    assert.ok(Math.abs(metrics[0].value_num - 33.33) < 1e-10);
+    assert.equal(metrics.some(m => m.metric_key === 'monthly_bill'), false);
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    deepseekSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => deepseekConnector.fetch({ secrets: { apiKey: 'ds_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /ds_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Datadog ──────────────────────────────────────────────────────────────────
+
+describe('datadog — mapEstimatedCost', () => {
+  it('sums total_cost across buckets', () => {
+    const { monthlyBill } = datadogMapCost({
+      data: [
+        { attributes: { total_cost: 40.0 } },
+        { attributes: { total_cost: 2.5 } },
+      ],
+    });
+    assert.ok(Math.abs(monthlyBill - 42.5) < 1e-10);
+  });
+
+  it('returns zero for empty data', () => {
+    assert.equal(datadogMapCost({}).monthlyBill, 0);
+  });
+});
+
+describe('datadog — connector.fetch (mocked HTTP)', () => {
+  it('rejects an unsupported site', async () => {
+    await assert.rejects(
+      () => datadogConnector.fetch({ secrets: { apiKey: 'dd', appKey: 'app' }, config: { site: 'evil.com' } }),
+      /Unsupported Datadog site/
+    );
+  });
+
+  it('propagates the allow_outbound gate error', async () => {
+    datadogSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => datadogConnector.fetch({ secrets: { apiKey: 'dd', appKey: 'app' }, config: {} }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill from fixture data', async () => {
+    datadogSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ data: [{ attributes: { total_cost: 123.45 } }] }),
+    }));
+
+    const metrics = await datadogConnector.fetch({ secrets: { apiKey: 'dd', appKey: 'app' }, config: {} });
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 123.45) < 1e-10);
+    assert.equal(bill.unit, 'USD');
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    datadogSetFetch(async () => ({ ok: false, status: 403, statusText: 'Forbidden' }));
+    await assert.rejects(
+      () => datadogConnector.fetch({ secrets: { apiKey: 'dd_secret', appKey: 'app_secret' }, config: {} }),
+      (err) => {
+        assert.match(err.message, /403/);
+        assert.doesNotMatch(err.message, /dd_secret/);
+        assert.doesNotMatch(err.message, /app_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── MongoDB Atlas (HTTP Digest) ────────────────────────────────────────────────
+
+describe('mongodb_atlas — parseDigestChallenge', () => {
+  it('parses quoted and bare directives', () => {
+    const c = atlasParseChallenge('Digest realm="MMS Public API", nonce="abc123", qop="auth", algorithm=MD5, stale=false');
+    assert.equal(c.realm, 'MMS Public API');
+    assert.equal(c.nonce, 'abc123');
+    assert.equal(c.qop, 'auth');
+    assert.equal(c.algorithm, 'MD5');
+  });
+});
+
+describe('mongodb_atlas — mapInvoiceResponse', () => {
+  it('prefers subtotalCents', () => {
+    assert.ok(Math.abs(atlasMapInvoice({ subtotalCents: 4599 }).monthlyBill - 45.99) < 1e-10);
+  });
+
+  it('falls back to summing line items', () => {
+    const { monthlyBill } = atlasMapInvoice({ lineItems: [{ totalPriceCents: 1000 }, { totalPriceCents: 250 }] });
+    assert.ok(Math.abs(monthlyBill - 12.5) < 1e-10);
+  });
+
+  it('returns zero for empty body', () => {
+    assert.equal(atlasMapInvoice({}).monthlyBill, 0);
+  });
+});
+
+describe('mongodb_atlas — connector.fetch (mocked digest handshake)', () => {
+  it('throws when orgId is missing from config', async () => {
+    await assert.rejects(
+      () => atlasConnector.fetch({ secrets: { publicKey: 'pub', privateKey: 'priv' }, config: {} }),
+      /orgId/
+    );
+  });
+
+  it('does the 401 challenge then authenticated retry', async () => {
+    let call = 0;
+    let secondAuthHeader = null;
+    atlasSetFetch(async (url, opts, init) => {
+      call++;
+      if (call === 1) {
+        return {
+          status: 401,
+          ok: false,
+          headers: { get: (k) => (k.toLowerCase() === 'www-authenticate'
+            ? 'Digest realm="MMS Public API", nonce="abc123", qop="auth", opaque="op42", algorithm=MD5'
+            : null) },
+        };
+      }
+      secondAuthHeader = init.headers.Authorization;
+      return { ok: true, status: 200, json: async () => ({ subtotalCents: 8800 }) };
+    });
+
+    const metrics = await atlasConnector.fetch({
+      secrets: { publicKey: 'pub', privateKey: 'priv' },
+      config:  { orgId: '5abc' },
+    });
+
+    assert.equal(call, 2);
+    assert.match(secondAuthHeader, /^Digest /);
+    assert.match(secondAuthHeader, /response="[a-f0-9]{32}"/);
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 88.0) < 1e-10);
+  });
+
+  it('throws a clean error (no key) when the retry fails', async () => {
+    let call = 0;
+    atlasSetFetch(async () => {
+      call++;
+      if (call === 1) {
+        return { status: 401, ok: false, headers: { get: () => 'Digest realm="r", nonce="n", qop="auth"' } };
+      }
+      return { ok: false, status: 401, statusText: 'Unauthorized' };
+    });
+    await assert.rejects(
+      () => atlasConnector.fetch({ secrets: { publicKey: 'pub', privateKey: 'priv_secret' }, config: { orgId: '5abc' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /priv_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Azure (AAD client-credentials) ─────────────────────────────────────────────
+
+describe('azure — mapQueryResponse', () => {
+  it('locates Cost/Currency columns by name and sums rows', () => {
+    const { monthlyBill, currency } = azureMapQuery({
+      properties: {
+        columns: [{ name: 'Cost' }, { name: 'Currency' }],
+        rows: [[10.5, 'USD'], [4.5, 'USD']],
+      },
+    });
+    assert.ok(Math.abs(monthlyBill - 15.0) < 1e-10);
+    assert.equal(currency, 'USD');
+  });
+
+  it('returns zero/default for empty body', () => {
+    const { monthlyBill, currency } = azureMapQuery({});
+    assert.equal(monthlyBill, 0);
+    assert.equal(currency, 'USD');
+  });
+});
+
+describe('azure — connector.fetch (mocked HTTP)', () => {
+  it('throws when required config is missing', async () => {
+    await assert.rejects(
+      () => azureConnector.fetch({ secrets: { clientSecret: 'cs' }, config: { tenantId: 't' } }),
+      /tenantId, clientId, subscriptionId/
+    );
+  });
+
+  it('propagates the allow_outbound gate error', async () => {
+    azureSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => azureConnector.fetch({
+        secrets: { clientSecret: 'cs' },
+        config:  { tenantId: 't', clientId: 'c', subscriptionId: 's' },
+      }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('exchanges a token then queries cost', async () => {
+    azureSetFetch(async (url) => {
+      if (url.includes('login.microsoftonline.com')) {
+        return { ok: true, json: async () => ({ access_token: 'tok_xyz' }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          properties: { columns: [{ name: 'Cost' }, { name: 'Currency' }], rows: [[77.7, 'USD']] },
+        }),
+      };
+    });
+
+    const metrics = await azureConnector.fetch({
+      secrets: { clientSecret: 'cs' },
+      config:  { tenantId: 't', clientId: 'c', subscriptionId: 's' },
+    });
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 77.7) < 1e-10);
+    assert.equal(bill.unit, 'USD');
+  });
+
+  it('throws a clean error (no secret) when the token request fails', async () => {
+    azureSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => azureConnector.fetch({
+        secrets: { clientSecret: 'cs_secret' },
+        config:  { tenantId: 't', clientId: 'c', subscriptionId: 's' },
+      }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /cs_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Connector self-description consistency ──────────────────────────────────────
+
+const { list: listAllConnectors } = require('./registry');
+
+describe('connector fields ↔ secretAccounts consistency', () => {
+  it('every secret-kind field maps to a declared secret account (and vice versa)', () => {
+    for (const def of listAllConnectors()) {
+      if (!def.fields) continue;
+      const secretFields = def.fields.filter(f => f.kind === 'secret').map(f => f.name).sort();
+      const accounts = [...(def.secretAccounts ?? [])].sort();
+      assert.deepEqual(secretFields, accounts, `${def.provider_key}: secret fields must match secretAccounts`);
+    }
   });
 });
 

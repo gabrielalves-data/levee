@@ -31,6 +31,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'Service token', kind: 'secret', required: true, placeholder: 'tokenId:tokenSecret' },
+    { name: 'org',    label: 'Organization',  kind: 'config', required: true },
+  ],
 
   async fetch({ secrets, config }) {
     const org = config?.org;

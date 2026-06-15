@@ -32,6 +32,11 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'GitHub PAT',   kind: 'secret', required: true, help: 'Needs the manage_billing:copilot scope.' },
+    { name: 'org',    label: 'Organization', kind: 'config', required: true, placeholder: 'my-github-org' },
+    { name: 'plan',   label: 'Plan',         kind: 'config', type: 'select', options: ['business', 'enterprise'], required: false },
+  ],
 
   async fetch({ secrets, config }) {
     const org = config?.org;

@@ -21,18 +21,32 @@
  * tier           {string}
  *   Always 'api' for Tier-2 connectors (live API pull).
  *
- * authType       {'apiKey' | 'awsKeyPair' | 'oauth' | 'localOAuth'}
- *   Tells the UI which credential form to render.
- *     apiKey     — single secret, e.g. an API token
- *     awsKeyPair — access key ID + secret access key pair
- *     oauth      — OAuth bearer token (refresh flow TBD)
- *     localOAuth — reads a token another local app already stores; no secret entry in UI, requires config.consentLocalToken === true
+ * authType       {string}
+ *   Advisory label for the credential type (e.g. 'apiKey', 'awsKeyPair', 'digest',
+ *   'oauthClientCredentials'). The connect form is driven by `fields` (below), not by
+ *   authType — the only value the app branches on is 'localOAuth', which renders a
+ *   consent checkbox instead of inputs and requires config.consentLocalToken === true.
+ *   Real auth logic lives inside fetch() (e.g. aws_cost.js signs SigV4 by hand).
  *
  * secretAccounts {string[]}
  *   The <name> portion of each OS keychain account this connector uses.
  *   Full keychain account path: connector:<serviceId>:<name>
  *   e.g. ['apiKey'] → getSecret('connector:42:apiKey')
  *        ['accessKeyId','secretAccessKey'] for awsKeyPair connectors
+ *   Must match the kind:'secret' entries in `fields` (a test enforces this).
+ *
+ * fields         {object[]}  (optional)
+ *   Schema the connect form renders. Omit for a single API-token connector (the UI
+ *   defaults to one required 'apiKey' secret field). Each field:
+ *     name        {string}  input key; secret fields are stored in the keychain under
+ *                           secretAccounts, config fields in service_connectors.config
+ *     label       {string}  shown above the input
+ *     kind        {'secret' | 'config'}
+ *     type        {'password' | 'text' | 'select'}  (optional; default password/text)
+ *     options     {string[]}  (optional; for select)
+ *     required    {boolean}   (optional)
+ *     placeholder {string}    (optional)
+ *     help        {string}    (optional; hint shown under the input)
  *
  * hosts          {string[]}
  *   Hostname allowlist. http.js rejects any request whose URL host is not
@@ -111,3 +125,10 @@ require('./railway');
 require('./planetscale');
 require('./cloudflare');
 require('./linear');
+require('./openrouter');
+require('./digitalocean');
+require('./twilio');
+require('./deepseek');
+require('./datadog');
+require('./mongodb_atlas');
+require('./azure');

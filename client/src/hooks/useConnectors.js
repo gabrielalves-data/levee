@@ -27,10 +27,10 @@ export function useAllowOutbound() {
 export function useUpsertConnector() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ serviceId, providerKey, secret, config }) =>
+    mutationFn: ({ serviceId, providerKey, secret, secrets, config }) =>
       apiFetch(`/api/connectors/${serviceId}`, {
         method: 'PUT',
-        body: JSON.stringify({ providerKey, secret, config }),
+        body: JSON.stringify({ providerKey, secret, secrets, config }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['services'] }),
   })

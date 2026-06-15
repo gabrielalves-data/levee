@@ -37,6 +37,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'Access token', kind: 'secret', required: true },
+    { name: 'teamId', label: 'Team ID',      kind: 'config', required: false, placeholder: 'team_xxx (omit for personal)' },
+  ],
 
   async fetch({ secrets, config }) {
     const teamId = config?.teamId;

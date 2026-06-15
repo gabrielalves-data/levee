@@ -63,6 +63,11 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey',    label: 'API token', kind: 'secret', required: true },
+    { name: 'zoneId',    label: 'Zone ID',    kind: 'config', required: false, help: 'For request analytics. Provide zone ID, account ID, or both.' },
+    { name: 'accountId', label: 'Account ID', kind: 'config', required: false, help: 'For billing history (needs Billing:Read).' },
+  ],
 
   async fetch({ secrets, config }) {
     const { zoneId, accountId } = config ?? {};

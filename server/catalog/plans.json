@@ -34,5 +34,31 @@
       "Individual": { "label": "Individual", "price": 10, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
       "Pro": { "label": "Pro", "price": 19, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
     }
+  },
+  "perplexity": {
+    "label": "Perplexity",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "midjourney": {
+    "label": "Midjourney",
+    "plans": {
+      "Basic": { "label": "Basic", "price": 10, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Standard": { "label": "Standard", "price": 30, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Pro": { "label": "Pro", "price": 60, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "mistral_lechat": {
+    "label": "Mistral Le Chat",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 14.99, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "v0": {
+    "label": "v0",
+    "plans": {
+      "Premium": { "label": "Premium", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
   }
 }

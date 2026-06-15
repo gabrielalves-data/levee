@@ -91,6 +91,10 @@ const connector = {
   authType:       'awsKeyPair',
   secretAccounts: ['accessKeyId', 'secretAccessKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'accessKeyId',     label: 'Access key ID',     kind: 'secret', required: true },
+    { name: 'secretAccessKey', label: 'Secret access key',  kind: 'secret', required: true },
+  ],
 
   async fetch({ secrets }) {
     const { start, end } = monthRange();

@@ -20,20 +20,31 @@ const PROVIDERS = [
   { key: 'claude',        label: 'Claude',         category: 'ai_model', catalogKey: 'claude',  apiKey: 'claude_plan' },
   { key: 'chatgpt',       label: 'ChatGPT',        category: 'ai_model', catalogKey: 'chatgpt' },
   { key: 'gemini',        label: 'Gemini',         category: 'ai_model', catalogKey: 'gemini' },
+  { key: 'perplexity',    label: 'Perplexity',     category: 'ai_model', catalogKey: 'perplexity' },
+  { key: 'midjourney',    label: 'Midjourney',     category: 'ai_model', catalogKey: 'midjourney' },
+  { key: 'mistral_lechat', label: 'Mistral Le Chat', category: 'ai_model', catalogKey: 'mistral_lechat' },
   // AI APIs (usage-based)
   { key: 'anthropic_api', label: 'Anthropic API',  category: 'ai_api',   apiKey: 'anthropic_api' },
   { key: 'openai_api',    label: 'OpenAI API',     category: 'ai_api',   apiKey: 'openai_api' },
+  { key: 'openrouter',    label: 'OpenRouter',     category: 'ai_api',   apiKey: 'openrouter' },
+  { key: 'deepseek',      label: 'DeepSeek',       category: 'ai_api',   apiKey: 'deepseek' },
   // Cloud
   { key: 'aws',           label: 'AWS',            category: 'cloud',    apiKey: 'aws_cost' },
   { key: 'vercel',        label: 'Vercel',         category: 'cloud',    apiKey: 'vercel' },
   { key: 'railway',       label: 'Railway',        category: 'cloud',    apiKey: 'railway' },
   { key: 'cloudflare',    label: 'Cloudflare',     category: 'cloud',    apiKey: 'cloudflare' },
   { key: 'planetscale',   label: 'PlanetScale',    category: 'cloud',    apiKey: 'planetscale' },
+  { key: 'digitalocean',  label: 'DigitalOcean',   category: 'cloud',    apiKey: 'digitalocean' },
+  { key: 'azure',         label: 'Azure',          category: 'cloud',    apiKey: 'azure' },
+  { key: 'mongodb_atlas', label: 'MongoDB Atlas',  category: 'cloud',    apiKey: 'mongodb_atlas' },
   // Dev tools
   { key: 'copilot',       label: 'GitHub Copilot', category: 'tool',     catalogKey: 'copilot', apiKey: 'github_copilot' },
   { key: 'cursor',        label: 'Cursor',         category: 'tool',     catalogKey: 'cursor' },
   { key: 'linear',        label: 'Linear',         category: 'tool',     apiKey: 'linear' },
   { key: 'sentry',        label: 'Sentry',         category: 'tool',     apiKey: 'sentry' },
+  { key: 'twilio',        label: 'Twilio',         category: 'tool',     apiKey: 'twilio' },
+  { key: 'datadog',       label: 'Datadog',        category: 'tool',     apiKey: 'datadog' },
+  { key: 'v0',            label: 'v0',             category: 'tool',     catalogKey: 'v0' },
 ];
 
 // Enrich an entry with the live-connector authType (so the UI knows whether to
@@ -46,6 +57,7 @@ function decorate(p) {
     if (def) {
       out.apiKey = p.apiKey;
       out.authType = def.authType;
+      if (def.fields) out.fields = def.fields;
     }
   }
   return out;

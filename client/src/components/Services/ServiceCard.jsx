@@ -248,13 +248,44 @@ function CatalogPanel({ service, catalogKey, onClose }) {
   )
 }
 
-// `apiKey`/`authType` come from the service's bound provider — the connector is
-// fixed, so the user only supplies a token (or localOAuth consent), never a provider.
-function ApiPanel({ service, apiKey, authType }) {
+// Renders one connector input from its `fields` schema entry.
+const FIELD_INPUT_CLS = 'w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600'
+
+function FormField({ field, value, onChange }) {
+  const { label, kind, type, options, required, placeholder, help } = field
+  const inputType = type ?? (kind === 'secret' ? 'password' : 'text')
+  return (
+    <div className="space-y-0.5">
+      <label className="text-xs text-slate-400">
+        {label}{required && <span className="text-red-400"> *</span>}
+      </label>
+      {inputType === 'select' ? (
+        <select value={value} onChange={e => onChange(e.target.value)} className={FIELD_INPUT_CLS}>
+          <option value="">Default</option>
+          {(options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input
+          type={inputType}
+          placeholder={placeholder ?? ''}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className={FIELD_INPUT_CLS}
+        />
+      )}
+      {help && <p className="text-xs text-slate-500 leading-snug">{help}</p>}
+    </div>
+  )
+}
+
+// `apiKey`/`authType`/`fields` come from the service's bound provider — the connector is
+// fixed, so the user only supplies its declared credentials (or localOAuth consent),
+// never a provider. Connectors without a `fields` schema get a single API-token field.
+function ApiPanel({ service, apiKey, authType, fields }) {
   const upsert = useUpsertConnector()
   const sync = useSyncConnector()
   const { allowed } = useAllowOutbound()
-  const [token, setToken] = useState('')
+  const [values, setValues] = useState({})
   const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
 
@@ -263,15 +294,29 @@ function ApiPanel({ service, apiKey, authType }) {
   const providerKey = apiKey
   const isLocalOAuth = authType === 'localOAuth'
 
+  const formFields = fields ?? [{ name: 'apiKey', label: 'API token', kind: 'secret', required: true }]
+  const requiredFilled = formFields
+    .filter(f => f.required)
+    .every(f => (values[f.name] ?? '').trim() !== '')
+  const canSave = !!providerKey && (isLocalOAuth ? consent : requiredFilled)
+
   async function handleSave() {
-    if (!providerKey || (isLocalOAuth ? !consent : !token)) return
+    if (!canSave) return
     setError('')
     try {
       if (isLocalOAuth) {
         await upsert.mutateAsync({ serviceId: service.id, providerKey, config: { consentLocalToken: true } })
       } else {
-        await upsert.mutateAsync({ serviceId: service.id, providerKey, secret: token })
-        setToken('')
+        const secrets = {}
+        const config = {}
+        for (const f of formFields) {
+          const v = (values[f.name] ?? '').trim()
+          if (v === '') continue
+          if (f.kind === 'secret') secrets[f.name] = v
+          else config[f.name] = v
+        }
+        await upsert.mutateAsync({ serviceId: service.id, providerKey, secrets, config })
+        setValues({})
       }
     } catch {
       setError('Failed to save connector')
@@ -306,18 +351,19 @@ function ApiPanel({ service, apiKey, authType }) {
                 </label>
               </>
             ) : (
-              <input
-                type="password"
-                placeholder="API token"
-                value={token}
-                onChange={e => setToken(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
-              />
+              formFields.map(f => (
+                <FormField
+                  key={f.name}
+                  field={f}
+                  value={values[f.name] ?? ''}
+                  onChange={v => setValues(prev => ({ ...prev, [f.name]: v }))}
+                />
+              ))
             )}
             {error && <p className="text-xs text-red-400">{error}</p>}
             <button
               onClick={handleSave}
-              disabled={!providerKey || (isLocalOAuth ? !consent : !token) || upsert.isPending}
+              disabled={!canSave || upsert.isPending}
               className={BTN_PRIMARY}
             >
               {upsert.isPending ? 'Saving…' : 'Save & Connect'}
@@ -449,7 +495,7 @@ function ConnectSection({ service }) {
           ) : tab === 'catalog' && hasCatalog ? (
             <CatalogPanel service={service} catalogKey={provider.catalogKey} onClose={() => setOpen(false)} />
           ) : (
-            <ApiPanel service={service} apiKey={provider.apiKey} authType={provider.authType} />
+            <ApiPanel service={service} apiKey={provider.apiKey} authType={provider.authType} fields={provider.fields} />
           )}
         </div>
       )}
