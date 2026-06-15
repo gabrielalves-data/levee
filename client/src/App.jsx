@@ -45,7 +45,7 @@ function Sidebar() {
       <div className="px-4 py-5 border-b border-slate-800">
         <h1 className="text-sm font-bold tracking-tight text-slate-200">
           <span className="text-emerald-400 glow">PS</span>{' '}
-          <span className="text-slate-200">C:\devcost</span>
+          <span className="text-slate-200">C:\levee</span>
           <span className="text-emerald-400">&gt;</span>
           <span className="caret" />
         </h1>
@@ -90,8 +90,8 @@ function Sidebar() {
 function NavigationListener() {
   const vtNavigate = useViewTransitionNavigate()
   useEffect(() => {
-    if (!window.devcost?.onNavigate) return
-    return window.devcost.onNavigate((route) => vtNavigate(route))
+    if (!window.levee?.onNavigate) return
+    return window.levee.onNavigate((route) => vtNavigate(route))
   }, [vtNavigate])
   return null
 }

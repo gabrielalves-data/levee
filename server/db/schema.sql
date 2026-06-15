@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS services (
   -- values can only be entered manually (no auto data retrieval available).
   auto_available INTEGER NOT NULL DEFAULT 0,
   connector_type TEXT  NOT NULL DEFAULT 'manual' CHECK (connector_type IN ('manual','catalog','api')),
+  -- Canonical provider directory key (see server/providers.js); NULL for manual services.
+  provider_key TEXT,
   plan_key     TEXT,
   last_sync_at TEXT,
   sync_status  TEXT,

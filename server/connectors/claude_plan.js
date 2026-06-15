@@ -72,39 +72,89 @@ function _setFetchForTest(fn) { _fetch = fn; }
 let _readToken = readLocalOAuthToken;
 function _setTokenReaderForTest(fn) { _readToken = fn; }
 
-// Pure — maps the usage endpoint body to the metric array. Tolerates missing
-// fields: a metric is emitted only when its source field exists and its
-// utilization is a finite number.
-function mapUsageResponse(body) {
-  const metrics = [];
-
-  const pct = [
-    { field: body?.five_hour,      metric_key: 'session_pct',     label: 'Session Limit (5h)' },
-    { field: body?.seven_day,      metric_key: 'weekly_pct',      label: 'Weekly Limit' },
-    { field: body?.seven_day_opus, metric_key: 'weekly_opus_pct', label: 'Weekly Opus Limit' },
-  ];
-
-  for (const { field, metric_key, label } of pct) {
-    const util = field?.utilization;
-    if (Number.isFinite(util)) {
-      metrics.push({
-        metric_key,
-        label,
-        value_type: 'percent',
-        value_num:  util,
-        unit:       '%',
-      });
-    }
+// Emits a percent metric for a window bucket's `utilization` and a date metric
+// for its `resets_at`, when each is present.
+function pushWindow(metrics, bucket, { pctKey, pctLabel, resetKey, resetLabel }) {
+  if (Number.isFinite(bucket?.utilization)) {
+    metrics.push({
+      metric_key: pctKey,
+      label:      pctLabel,
+      value_type: 'percent',
+      value_num:  bucket.utilization,
+      unit:       '%',
+    });
   }
-
-  const resetsAt = body?.seven_day?.resets_at;
+  const resetsAt = bucket?.resets_at;
   if (typeof resetsAt === 'string' && resetsAt.length > 0) {
     metrics.push({
-      metric_key: 'weekly_reset_at',
-      label:      'Weekly Reset',
+      metric_key: resetKey,
+      label:      resetLabel,
       value_type: 'date',
       value_text: resetsAt,
     });
+  }
+}
+
+// Pure — maps the usage endpoint body to the metric array. We surface a fixed
+// set: the 5-hour session window and the 7-day rolling window (each as a
+// utilization % plus its reset time), and the optional pay-as-you-go "extra
+// usage" pool. Extra usage always reports an Enabled/Disabled status; its credit
+// figures are emitted only while it's enabled.
+function mapUsageResponse(body) {
+  const metrics = [];
+
+  pushWindow(metrics, body?.five_hour, {
+    pctKey: 'session_pct',   pctLabel: 'Session Usage (5h)',
+    resetKey: 'session_reset_at', resetLabel: 'Session Reset',
+  });
+  pushWindow(metrics, body?.seven_day, {
+    pctKey: 'weekly_pct',    pctLabel: 'Weekly Usage',
+    resetKey: 'weekly_reset_at',  resetLabel: 'Weekly Reset',
+  });
+
+  const extra = body?.extra_usage;
+  if (extra && typeof extra === 'object') {
+    const enabled = extra.is_enabled === true;
+    metrics.push({
+      metric_key: 'extra_usage_enabled',
+      label:      'Extra Usage',
+      value_type: 'text',
+      value_text: enabled ? 'Enabled' : 'Disabled',
+    });
+    if (enabled) {
+      if (Number.isFinite(extra.utilization)) {
+        metrics.push({
+          metric_key: 'extra_usage_pct',
+          label:      'Extra Usage Used',
+          value_type: 'percent',
+          value_num:  extra.utilization,
+          unit:       '%',
+        });
+      }
+      // `used_credits`/`monthly_limit` are integer minor units; `decimal_places`
+      // says how many to shift to get the major-unit amount (e.g. 2 → cents).
+      const places = Number.isFinite(extra.decimal_places) ? extra.decimal_places : 0;
+      const scale = 10 ** places;
+      const currency = typeof extra.currency === 'string' ? extra.currency : null;
+      if (Number.isFinite(extra.used_credits)) {
+        metrics.push({
+          metric_key: 'extra_used_credits',
+          label:      'Extra Credits Used',
+          value_type: 'currency',
+          value_num:  extra.used_credits / scale,
+          unit:       currency,
+        });
+      }
+      if (Number.isFinite(extra.monthly_limit)) {
+        metrics.push({
+          metric_key: 'extra_monthly_limit',
+          label:      'Extra Limit',
+          value_type: 'currency',
+          value_num:  extra.monthly_limit / scale,
+          unit:       currency,
+        });
+      }
+    }
   }
 
   if (metrics.length === 0) {
@@ -120,7 +170,7 @@ const connector = {
   label:          'Claude Plan Usage (local OAuth)',
   tier:           'api',
   authType:       'localOAuth',
-  secretAccounts: [],            // no keychain entries owned by DevCost
+  secretAccounts: [],            // no keychain entries owned by Levee
   hosts:          HOSTS,
 
   async fetch() {

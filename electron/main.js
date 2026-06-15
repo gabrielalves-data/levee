@@ -39,7 +39,7 @@ function getFreePort() {
     });
   });
 }
-const CONFIG_PATH  = path.join(require('os').homedir(), '.devcost', 'config.json');
+const CONFIG_PATH  = path.join(require('os').homedir(), '.levee', 'config.json');
 
 function getConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
@@ -71,7 +71,7 @@ async function startServer() {
   try {
     const cfg = getConfig();
     if (cfg.dbEncrypted && keytar) {
-      dbKey = (await keytar.getPassword('devcost', 'db-encryption-key')) ?? '';
+      dbKey = (await keytar.getPassword('levee', 'db-encryption-key')) ?? '';
     }
   } catch { /* config absent or unreadable — open unencrypted */ }
 
@@ -84,14 +84,14 @@ async function startServer() {
     env: {
       ...process.env,
       PORT:           String(PORT),
-      DEVCOST_TOKEN:  LAUNCH_TOKEN,
-      DEVCOST_DB_KEY: dbKey,
+      LEVEE_TOKEN:  LAUNCH_TOKEN,
+      LEVEE_DB_KEY: dbKey,
     },
     stdio: 'inherit',
     windowsHide: true,
   });
   serverProcess.on('error', (err) => {
-    console.error('[devcost] server process error:', err.message);
+    console.error('[levee] server process error:', err.message);
   });
 
   // Wait until OUR server (matching this launch's token) is answering before
@@ -104,14 +104,14 @@ async function startServer() {
     const check = () => {
       const req = http.request(
         { host: '127.0.0.1', port: PORT, path: '/', method: 'GET',
-          headers: { 'x-devcost-token': LAUNCH_TOKEN } },
+          headers: { 'x-levee-token': LAUNCH_TOKEN } },
         (res) => {
           res.resume();
           if (res.statusCode === 401) {
             // Port held by a different server (wrong token). Don't accept it.
             if (Date.now() >= deadline) {
               reject(new Error(
-                `[devcost] port ${PORT} is held by another process with a ` +
+                `[levee] port ${PORT} is held by another process with a ` +
                 `different token (stale server?). Close it and relaunch.`));
             } else {
               setTimeout(check, 200);
@@ -122,7 +122,7 @@ async function startServer() {
         });
       req.on('error', () => {
         if (Date.now() >= deadline) {
-          reject(new Error('[devcost] server did not start within 15 s'));
+          reject(new Error('[levee] server did not start within 15 s'));
         } else {
           setTimeout(check, 150);
         }
@@ -131,7 +131,7 @@ async function startServer() {
     };
     setTimeout(check, 150);
   });
-  console.log('[devcost] server ready');
+  console.log('[levee] server ready');
 }
 
 function createMainWindow() {
@@ -193,9 +193,9 @@ function createMainWindow() {
 
 function setupTray() {
   tray = new Tray(createTrayIcon());
-  tray.setToolTip('DevCost');
+  tray.setToolTip('Levee');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open DevCost',   click: () => { mainWin?.show(); mainWin?.focus(); } },
+    { label: 'Open Levee',   click: () => { mainWin?.show(); mainWin?.focus(); } },
     { label: 'Toggle Overlay', click: () => toggleOverlay() },
     { type: 'separator' },
     { label: 'Quit', click: () => app.exit(0) },
@@ -210,7 +210,7 @@ function toggleOverlay() {
 }
 
 function boundsPath() {
-  return path.join(app.getPath('home'), '.devcost', 'overlay-bounds.json');
+  return path.join(app.getPath('home'), '.levee', 'overlay-bounds.json');
 }
 
 app.whenReady().then(async () => {

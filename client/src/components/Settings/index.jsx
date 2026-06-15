@@ -11,7 +11,7 @@ export default function AllowOutboundToggle() {
         <div>
           <p className="text-sm text-white">Allow Outbound Connections</p>
           <p className="text-xs text-slate-500 mt-0.5 max-w-xs">
-            Allow outbound connections to provider APIs. Off by default. DevCost only contacts the official host of each connector you enable.
+            Allow outbound connections to provider APIs. Off by default. Levee only contacts the official host of each connector you enable.
           </p>
         </div>
       </div>

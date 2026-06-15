@@ -29,7 +29,7 @@ venv/
 __pycache__/
 *.py[cod]
 
-# SQLite databases (user data lives at ~/.devcost/, but guard local copies too)
+# SQLite databases (user data lives at ~/.levee/, but guard local copies too)
 *.db
 *.sqlite
 *.sqlite3

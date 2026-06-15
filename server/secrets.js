@@ -3,7 +3,7 @@
 // All secrets live in the OS keychain via keytar.
 // They never touch SQLite, log files, or JSON exports.
 
-const SERVICE_NAME = 'devcost';
+const SERVICE_NAME = 'levee';
 
 let keytar;
 try {

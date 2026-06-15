@@ -6,28 +6,6 @@ const catalog = require('../catalog/plans.json');
 
 const router = Router();
 
-// Format a Date as a local YYYY-MM-DD string (avoids UTC drift from toISOString).
-function ymd(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-// Next reset date for the given cadence.
-//   monthly → first day of next month
-//   weekly  → next Monday (strictly in the future)
-function nextResetDate(cadence, from = new Date()) {
-  if (cadence === 'weekly') {
-    const day = from.getDay();              // 0 Sun .. 6 Sat
-    const daysUntilMonday = ((1 - day + 7) % 7) || 7;
-    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + daysUntilMonday);
-    return ymd(d);
-  }
-  // monthly (default)
-  return ymd(new Date(from.getFullYear(), from.getMonth() + 1, 1));
-}
-
 const upsertMetric = db.prepare(`
   INSERT INTO service_metrics
     (service_id, metric_key, label, value_type, value_num, value_text, unit, updated_at)
@@ -48,12 +26,9 @@ const setServicePlan = db.prepare(`
 `);
 
 const applyPlan = db.transaction((serviceId, plan, planKey) => {
-  const resetDate = nextResetDate(plan.reset_cadence);
   setServicePlan.run(planKey, plan.price, serviceId);
   upsertMetric.run(serviceId, 'plan', 'Plan', 'text', null, plan.label, null);
   upsertMetric.run(serviceId, 'monthly_bill', 'Monthly Bill', 'currency', plan.price, null, plan.currency);
-  upsertMetric.run(serviceId, 'reset_date', 'Reset Date', 'date', null, resetDate, null);
-  return resetDate;
 });
 
 // GET /api/catalog — the parsed plan catalog (no secrets stored here).
@@ -77,8 +52,8 @@ router.post('/apply', (req, res) => {
   const exists = db.prepare('SELECT id FROM services WHERE id = ?').get(serviceId);
   if (!exists) return res.status(404).json({ error: 'Service not found' });
 
-  const resetDate = applyPlan(serviceId, plan, planKey);
-  res.json({ ok: true, serviceId, planKey, monthly_bill: plan.price, reset_date: resetDate });
+  applyPlan(serviceId, plan, planKey);
+  res.json({ ok: true, serviceId, planKey, monthly_bill: plan.price });
 });
 
 module.exports = router;

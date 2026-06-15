@@ -3,7 +3,7 @@
 /**
  * Tier-2 Connector Registry
  *
- * A connector describes how DevCost pulls live metrics from a provider API.
+ * A connector describes how Levee pulls live metrics from a provider API.
  * Register connectors at module load time with `register(key, def)`.
  * The server never instantiates connectors itself — callers resolve a key,
  * fetch the definition, resolve secrets from the OS keychain, then call

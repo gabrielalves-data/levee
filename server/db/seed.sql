@@ -35,23 +35,18 @@ INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_see
 
 -- Representative metrics per service (values left NULL — filled by user)
 
--- Claude (id=8): Pro plan
+-- Claude (id=8): live usage % comes from the claude_plan connector; only the
+-- bill is tracked manually/via catalog.
 INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
-  (8, 'monthly_bill',   'Monthly bill',      'currency'),
-  (8, 'current_usage',  'Usage this period', 'percent'),
-  (8, 'weekly_usage',   'Weekly usage',      'percent'),
-  (8, 'limit',          'Monthly limit',     'currency'),
-  (8, 'reset_date',     'Next reset',        'date');
+  (8, 'monthly_bill',   'Monthly bill',      'currency');
 
 -- ChatGPT (id=9)
 INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
-  (9, 'monthly_bill', 'Monthly bill', 'currency'),
-  (9, 'reset_date',   'Next reset',   'date');
+  (9, 'monthly_bill', 'Monthly bill', 'currency');
 
 -- Gemini (id=10)
 INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
-  (10, 'monthly_bill', 'Monthly bill', 'currency'),
-  (10, 'reset_date',   'Next reset',   'date');
+  (10, 'monthly_bill', 'Monthly bill', 'currency');
 
 -- Anthropic API (id=11)
 INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES

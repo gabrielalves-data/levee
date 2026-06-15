@@ -3,8 +3,8 @@
 const crypto = require('crypto');
 
 // Per-launch token — generated once at module load, never persisted.
-// Electron main can pre-set DEVCOST_TOKEN so it knows the value before spawning.
-const LAUNCH_TOKEN = process.env.DEVCOST_TOKEN || crypto.randomBytes(32).toString('hex');
+// Electron main can pre-set LEVEE_TOKEN so it knows the value before spawning.
+const LAUNCH_TOKEN = process.env.LEVEE_TOKEN || crypto.randomBytes(32).toString('hex');
 
 const LOOPBACK      = new Set(['127.0.0.1', 'localhost', '::1']);
 // Allowed origins: loopback-only, any port (covers Vite :5173 in dev and file:// in Electron)
@@ -27,7 +27,7 @@ function localGuard(req, res, next) {
     return res.status(403).json({ error: 'Forbidden: untrusted origin' });
   }
 
-  if (!tokenMatches(req.headers['x-devcost-token'])) {
+  if (!tokenMatches(req.headers['x-levee-token'])) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

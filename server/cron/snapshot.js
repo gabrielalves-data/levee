@@ -65,7 +65,7 @@ function startCrons() {
   // Sync enabled API connectors every 6 hours (only when allow_outbound=true)
   cron.schedule('0 */6 * * *', () => {
     syncEnabledConnectors().catch(err => {
-      console.error('[devcost] connector sync error:', err.message);
+      console.error('[levee] connector sync error:', err.message);
     });
   });
 

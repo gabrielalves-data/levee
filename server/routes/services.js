@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const db = require('../db/database');
+const { getProvider } = require('../providers');
 
 const router = Router();
 
@@ -16,7 +17,8 @@ router.get('/', (req, res) => {
   const all = req.query.all === '1';
   const rows = db.prepare(`
     SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
-           billing_day, icon, is_seed, active, auto_available, connector_type, plan_key,
+           billing_day, icon, is_seed, active, auto_available, connector_type,
+           provider_key, plan_key,
            last_sync_at, sync_status, sync_error, created_at
     FROM   services
     WHERE  (? = 1 OR active = 1)
@@ -30,13 +32,15 @@ router.get('/:id', (req, res) => {
   const row = db.prepare(`
     WITH svc AS (
       SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
-             billing_day, icon, is_seed, active, auto_available, connector_type, plan_key,
+             billing_day, icon, is_seed, active, auto_available, connector_type,
+             provider_key, plan_key,
              last_sync_at, sync_status, sync_error, created_at
       FROM   services
       WHERE  id = ?
     )
     SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
-           billing_day, icon, is_seed, active, auto_available, connector_type, plan_key,
+           billing_day, icon, is_seed, active, auto_available, connector_type,
+           provider_key, plan_key,
            last_sync_at, sync_status, sync_error, created_at
     FROM   svc
   `).get(req.params.id);
@@ -46,15 +50,30 @@ router.get('/:id', (req, res) => {
 
 // POST /api/services
 router.post('/', (req, res) => {
-  const { name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, icon } = req.body;
-  if (!name || !provider || !category) {
+  const { name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, icon, provider_key } = req.body;
+
+  // Provider-first path: a known provider_key binds the service to the directory,
+  // makes auto-retrieval available, and supplies a default category.
+  let resolvedCategory = category;
+  let autoAvailable = 0;
+  if (provider_key != null) {
+    const provider_def = getProvider(provider_key);
+    if (!provider_def) {
+      return res.status(400).json({ error: `Unknown provider_key: ${provider_key}` });
+    }
+    resolvedCategory = category ?? provider_def.category;
+    autoAvailable = 1;
+  }
+
+  if (!name || !provider || !resolvedCategory) {
     return res.status(400).json({ error: 'name, provider, category required' });
   }
   const result = db.prepare(`
-    INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, icon)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(name, provider, category, cost_model ?? 'flat',
-         monthly_cost ?? null, budget_cap ?? null, billing_day ?? null, icon ?? null);
+    INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, icon, provider_key, auto_available)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(name, provider, resolvedCategory, cost_model ?? 'flat',
+         monthly_cost ?? null, budget_cap ?? null, billing_day ?? null, icon ?? null,
+         provider_key ?? null, autoAvailable);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 

@@ -1,4 +1,4 @@
-let _token = import.meta.env.VITE_DEVCOST_TOKEN || '';
+let _token = import.meta.env.VITE_LEVEE_TOKEN || '';
 
 // Base URL for API calls. Empty in dev so requests are relative and ride the
 // Vite proxy. In the packaged app the UI loads from file://, where relative
@@ -7,14 +7,14 @@ let _token = import.meta.env.VITE_DEVCOST_TOKEN || '';
 let _base = '';
 
 export async function initToken() {
-  if (typeof window !== 'undefined' && window.devcost?.getToken) {
-    _token = await window.devcost.getToken();
-    if (import.meta.env.PROD && window.devcost.getPort) {
-      const port = await window.devcost.getPort();
+  if (typeof window !== 'undefined' && window.levee?.getToken) {
+    _token = await window.levee.getToken();
+    if (import.meta.env.PROD && window.levee.getPort) {
+      const port = await window.levee.getPort();
       _base = `http://127.0.0.1:${port}`;
     }
   } else {
-    console.warn('[initToken] window.devcost not available — token will be empty');
+    console.warn('[initToken] window.levee not available — token will be empty');
   }
 }
 
@@ -25,7 +25,7 @@ export async function apiFetch(path, opts = {}) {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
-      'x-devcost-token': getToken(),
+      'x-levee-token': getToken(),
       ...opts.headers,
     },
   })

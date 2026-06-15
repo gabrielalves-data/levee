@@ -9,7 +9,7 @@ const db     = require('../db/database');
 const { getSecret, setSecret, deleteSecret } = require('../secrets');
 
 const router  = Router();
-const CFG_DIR  = path.join(os.homedir(), '.devcost');
+const CFG_DIR  = path.join(os.homedir(), '.levee');
 const CFG_PATH = path.join(CFG_DIR, 'config.json');
 
 function readConfig() {

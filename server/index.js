@@ -12,6 +12,7 @@ const backupRouter      = require('./routes/backup');
 const encryptionRouter  = require('./routes/encryption');
 const catalogRouter     = require('./routes/catalog');
 const connectorsRouter  = require('./routes/connectors');
+const providersRouter   = require('./routes/providers');
 const { startCrons } = require('./cron/snapshot');
 
 // Load all connectors so they self-register on startup.
@@ -35,10 +36,11 @@ app.use('/api/backup',      backupRouter);
 app.use('/api/encryption',  encryptionRouter);
 app.use('/api/catalog',     catalogRouter);
 app.use('/api/connectors',  connectorsRouter);
+app.use('/api/providers',   providersRouter);
 
 app.listen(PORT, HOST, () => {
-  console.log(`[devcost] listening on ${HOST}:${PORT}`);
-  console.log('[devcost] server ready (token set)');
+  console.log(`[levee] listening on ${HOST}:${PORT}`);
+  console.log('[levee] server ready (token set)');
   startCrons();
 });
 

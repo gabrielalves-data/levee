@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 console.log('[preload] script loaded');
 
 try {
-  contextBridge.exposeInMainWorld('devcost', {
+  contextBridge.exposeInMainWorld('levee', {
     getToken:      () => ipcRenderer.invoke('get-token'),
     getPort:       () => ipcRenderer.invoke('get-port'),
     openDashboard: (serviceId) => ipcRenderer.send('open-dashboard', serviceId),
@@ -42,7 +42,7 @@ try {
       return () => ipcRenderer.removeListener('overlay-visibility', handler);
     },
   });
-  console.log('[preload] devcost exposed OK');
+  console.log('[preload] levee exposed OK');
 } catch (err) {
   console.error('[preload] contextBridge failed:', err.message, err.stack);
 }

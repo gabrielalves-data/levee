@@ -9,7 +9,7 @@
 const db = require('../db/database');
 
 const TIMEOUT_MS = 10_000;
-const USER_AGENT = 'DevCost/0.1';
+const USER_AGENT = 'Levee/0.1';
 
 const getAllowOutbound = db.prepare(
   "SELECT value FROM app_settings WHERE key = 'allow_outbound'"

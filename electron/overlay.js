@@ -10,7 +10,7 @@ const PILL = 38;   // collapsed (minimized) overlay window size — kept in sync
 const MARGIN = 12; // gap kept between the overlay (FAB or panel) and every screen edge
 
 function boundsPath() {
-  return path.join(app.getPath('home'), '.devcost', 'overlay-bounds.json');
+  return path.join(app.getPath('home'), '.levee', 'overlay-bounds.json');
 }
 
 function getSavedBounds() {

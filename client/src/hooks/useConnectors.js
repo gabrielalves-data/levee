@@ -24,14 +24,6 @@ export function useAllowOutbound() {
   }
 }
 
-export function useConnectorProviders() {
-  return useQuery({
-    queryKey: ['connectors', 'providers'],
-    queryFn: () => apiFetch('/api/connectors/providers'),
-    staleTime: 5 * 60_000,
-  })
-}
-
 export function useUpsertConnector() {
   const qc = useQueryClient()
   return useMutation({

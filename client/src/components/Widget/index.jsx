@@ -78,7 +78,7 @@ function SlotEditor({ slot, onSave, onClear }) {
 }
 
 function notifyOverlay() {
-  window.devcost?.notifyWidgetUpdate?.()
+  window.levee?.notifyWidgetUpdate?.()
 }
 
 export default function WidgetConfig() {

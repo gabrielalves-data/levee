@@ -35,7 +35,7 @@ function formatValue(slot) {
 function Slot({ slot }) {
   return (
     <div
-      onClick={() => window.devcost?.openDashboard(slot.service_id)}
+      onClick={() => window.levee?.openDashboard(slot.service_id)}
       style={{ WebkitAppRegion: 'no-drag' }}
       className="flex-1 rounded-lg bg-black/50 border border-white/[0.08] px-2.5 py-1.5 flex flex-col justify-between cursor-pointer hover:bg-black/65 active:scale-[0.97] transition-all select-none"
     >
@@ -88,14 +88,14 @@ async function startOverlayDrag(e, size, onTap, anchor) {
   const [w, h] = size
   const originX = e.screenX
   const originY = e.screenY
-  const start = (await window.devcost?.overlayGetPosition?.()) || [0, 0]
+  const start = (await window.levee?.overlayGetPosition?.()) || [0, 0]
 
   let raf = null
   let pending = null
   let moved = false
   const flush = () => {
     raf = null
-    if (pending) window.devcost?.overlayMove?.(pending[0], pending[1], w, h, anchor)
+    if (pending) window.levee?.overlayMove?.(pending[0], pending[1], w, h, anchor)
   }
   const onMove = (ev) => {
     if (!moved &&
@@ -106,7 +106,7 @@ async function startOverlayDrag(e, size, onTap, anchor) {
   }
   const onUp = () => {
     if (raf !== null) cancelAnimationFrame(raf)
-    if (moved && pending) window.devcost?.overlayMove?.(pending[0], pending[1], w, h, anchor)
+    if (moved && pending) window.levee?.overlayMove?.(pending[0], pending[1], w, h, anchor)
     else if (!moved) onTap?.()
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
@@ -141,14 +141,14 @@ function OverlayInner() {
   const panelW = WINDOW_W[Math.min(filled.length, 4)]
 
   useEffect(() => {
-    const cleanup = window.devcost?.onWidgetUpdate?.(() => refetch())
+    const cleanup = window.levee?.onWidgetUpdate?.(() => refetch())
     return () => cleanup?.()
   }, [refetch])
 
   // Enable → scale/fade in from the corner; disable → scale/fade out. The window is
   // already shown before an `enter` arrives, so RAF runs and the in-animation plays.
   useEffect(() => {
-    const cleanup = window.devcost?.onOverlayVisibility?.((show) => {
+    const cleanup = window.levee?.onOverlayVisibility?.((show) => {
       if (show) {
         setVisible(false)
         requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
@@ -171,7 +171,7 @@ function OverlayInner() {
   }
 
   const expand = async (animate) => {
-    const a = await window.devcost?.overlayExpand?.(panelW, WINDOW_H)
+    const a = await window.levee?.overlayExpand?.(panelW, WINDOW_H)
     if (a) { anchorRef.current = a; setAnchor(a) }
     if (animate) { setVtOrigin(anchorRef.current); morphPhase(() => setPhase('open')) }
   }
@@ -182,7 +182,7 @@ function OverlayInner() {
     if (phase !== 'open') return
     setVtOrigin(anchorRef.current)
     await morphPhase(() => setPhase('minimized'))
-    window.devcost?.overlayCollapse?.(anchorRef.current)
+    window.levee?.overlayCollapse?.(anchorRef.current)
   }
 
   // Lay out the restored panel once on mount (the window opens in `open` phase).
@@ -193,7 +193,7 @@ function OverlayInner() {
   const didMount = useRef(false)
   useEffect(() => {
     if (!didMount.current) { didMount.current = true; return }
-    if (phase === 'open') window.devcost?.overlayRefit?.(panelW, WINDOW_H, anchorRef.current)
+    if (phase === 'open') window.levee?.overlayRefit?.(panelW, WINDOW_H, anchorRef.current)
   }, [panelW]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Inset the orb by GUTTER from the anchored corner so it sits centred in the

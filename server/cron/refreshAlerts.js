@@ -29,7 +29,7 @@ function checkBudgets() {
     const pct = row.monthly_bill / row.budget_cap;
     if (pct >= 0.8) {
       notifier.notify({
-        title:   'DevCost — Budget Alert',
+        title:   'Levee — Budget Alert',
         message: `${row.name} is at ${Math.round(pct * 100)}% of budget ($${row.monthly_bill.toFixed(2)} / $${row.budget_cap.toFixed(2)})`,
         sound:   false,
       });

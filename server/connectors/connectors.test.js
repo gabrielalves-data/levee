@@ -1079,7 +1079,7 @@ const claudePlanFullBody = {
 };
 
 describe('claude_plan — mapUsageResponse', () => {
-  it('maps a full body to 4 metrics with correct keys and values', () => {
+  it('maps the session + weekly windows (% and reset), ignoring other buckets', () => {
     const metrics = claudePlanMapUsage(claudePlanFullBody);
     assert.equal(metrics.length, 4);
 
@@ -1088,22 +1088,55 @@ describe('claude_plan — mapUsageResponse', () => {
     assert.equal(session.value_type, 'percent');
     assert.equal(session.unit,       '%');
 
+    const sessionReset = metrics.find(m => m.metric_key === 'session_reset_at');
+    assert.equal(sessionReset.value_type, 'date');
+    assert.equal(sessionReset.value_text, '2026-06-10T18:00:00Z');
+
     const weekly = metrics.find(m => m.metric_key === 'weekly_pct');
     assert.equal(weekly.value_num, 61);
-
-    const opus = metrics.find(m => m.metric_key === 'weekly_opus_pct');
-    assert.equal(opus.value_num, 12);
 
     const reset = metrics.find(m => m.metric_key === 'weekly_reset_at');
     assert.equal(reset.value_type, 'date');
     assert.equal(reset.value_text, '2026-06-14T00:00:00Z');
+
+    // seven_day_opus is no longer surfaced.
+    assert.equal(metrics.some(m => m.metric_key === 'weekly_opus_pct'), false);
   });
 
-  it('emits a single metric when only five_hour is present', () => {
+  it('emits a single metric when only five_hour utilization is present', () => {
     const metrics = claudePlanMapUsage({ five_hour: { utilization: 50 } });
     assert.equal(metrics.length, 1);
     assert.equal(metrics[0].metric_key, 'session_pct');
     assert.equal(metrics[0].value_num,  50);
+  });
+
+  it('always reports extra_usage status and shows credits only when enabled', () => {
+    const disabled = claudePlanMapUsage({
+      five_hour:   { utilization: 10 },
+      extra_usage: { is_enabled: false, monthly_limit: null, used_credits: null },
+    });
+    const offStatus = disabled.find(m => m.metric_key === 'extra_usage_enabled');
+    assert.equal(offStatus.value_text, 'Disabled');
+    assert.equal(disabled.some(m => m.metric_key === 'extra_used_credits'), false);
+
+    const enabled = claudePlanMapUsage({
+      five_hour:   { utilization: 10 },
+      extra_usage: {
+        is_enabled: true, utilization: 40,
+        used_credits: 420, monthly_limit: 3500,
+        currency: 'USD', decimal_places: 2,
+      },
+    });
+    assert.equal(enabled.find(m => m.metric_key === 'extra_usage_enabled').value_text, 'Enabled');
+    assert.equal(enabled.find(m => m.metric_key === 'extra_usage_pct').value_num, 40);
+
+    const used = enabled.find(m => m.metric_key === 'extra_used_credits');
+    assert.equal(used.value_type, 'currency');
+    assert.equal(used.value_num,  4.2);   // 420 minor units, decimal_places 2
+    assert.equal(used.unit,       'USD');
+
+    const limit = enabled.find(m => m.metric_key === 'extra_monthly_limit');
+    assert.equal(limit.value_num, 35);
   });
 
   it('throws on an empty body (no recognizable data)', () => {
@@ -1151,8 +1184,34 @@ describe('claude_plan — connector.fetch (mocked HTTP + token reader)', () => {
 });
 
 describe('claude_plan — connector shape', () => {
-  it('owns no DevCost secret accounts and locks to the Anthropic host', () => {
+  it('owns no Levee secret accounts and locks to the Anthropic host', () => {
     assert.deepEqual(claudePlanConnector.secretAccounts, []);
     assert.deepEqual(claudePlanConnector.hosts, ['api.anthropic.com']);
+  });
+});
+
+const { listProviders, getProvider } = require('../providers');
+const { get: getRegisteredConnector } = require('./registry');
+const catalogPlans = require('../catalog/plans.json');
+
+describe('provider directory', () => {
+  it('binds Claude to both a catalog plan and the live local-OAuth connector', () => {
+    const claude = getProvider('claude');
+    assert.equal(claude.catalogKey, 'claude');
+    assert.equal(claude.apiKey, 'claude_plan');
+    assert.equal(claude.authType, 'localOAuth');
+    assert.equal(claude.category, 'ai_model');
+  });
+
+  it('returns undefined for an unknown provider key', () => {
+    assert.equal(getProvider('nope'), undefined);
+  });
+
+  it('every declared catalogKey/apiKey resolves to a real catalog plan / connector', () => {
+    for (const p of listProviders()) {
+      assert.ok(p.catalogKey || p.apiKey, `${p.key} must offer at least one connection method`);
+      if (p.catalogKey) assert.ok(catalogPlans[p.catalogKey], `missing catalog plans for ${p.catalogKey}`);
+      if (p.apiKey) assert.ok(getRegisteredConnector(p.apiKey), `missing connector for ${p.apiKey}`);
+    }
   });
 });

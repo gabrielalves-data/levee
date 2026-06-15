@@ -1,4 +1,4 @@
-# DevCost
+# Levee
 
 Privacy-first, local-only desktop app for tracking developer costs — cloud, AI models,
 AI APIs, dev tools. No cloud sync, no accounts, no telemetry, zero outbound network calls
@@ -71,7 +71,7 @@ all other outbound requests.
 
 ## Global hotkey
 
-`Ctrl+Shift+D` (Windows/Linux) / `Cmd+Shift+D` (macOS) toggles the main window.
+`Ctrl+Shift+G` (Windows/Linux) / `Cmd+Shift+G` (macOS) toggles the overlay widget.
 
 ---
 
@@ -118,6 +118,33 @@ all other outbound requests.
 | PUT | `/api/connectors/:serviceId` | Configure connector + store secret(s) in keychain |
 | DELETE | `/api/connectors/:serviceId` | Disable connector + remove secret(s) from keychain |
 | POST | `/api/connectors/:serviceId/sync` | Trigger a manual sync |
+
+### Snapshots
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/snapshots` | List cost snapshots (monthly rollups) |
+
+### Settings
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/settings/:key` | Read an app setting (e.g. `allow_outbound`) |
+| PUT | `/api/settings/:key` | Write an app setting (secrets blocked by key pattern) |
+
+### Backup
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/backup/export` | Export all data to JSON (secrets excluded) |
+| POST | `/api/backup/import` | Import a previously exported JSON backup |
+
+### Encryption
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/encryption/status` | Check whether at-rest DB encryption is active |
+| POST | `/api/encryption/toggle` | Enable or disable DB encryption (key in OS keychain) |
 
 ---
 

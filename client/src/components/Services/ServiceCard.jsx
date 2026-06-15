@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import { useMetrics, useUpsertMetric } from '../../hooks/useMetrics'
 import { useSnapshots } from '../../hooks/useSnapshots'
 import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
-import { useAllowOutbound, useConnectorProviders, useUpsertConnector, useSyncConnector } from '../../hooks/useConnectors'
+import { useAllowOutbound, useUpsertConnector, useSyncConnector } from '../../hooks/useConnectors'
+import { useProviders } from '../../hooks/useProviders'
 
 const CATEGORY_STYLES = {
   cloud:    'bg-blue-500/20 text-blue-300',
@@ -21,6 +22,23 @@ const CATEGORY_LABELS = {
   custom:   'Custom',
 }
 
+// Date metrics are all "next reset" timestamps — show the time remaining
+// ("in 5h", "in 3d") rather than a raw date. Falls back to the date once elapsed.
+function formatReset(date) {
+  const ms = date.getTime() - Date.now()
+  if (ms <= 0) return date.toLocaleDateString()
+  const mins = Math.round(ms / 60000)
+  if (mins < 60) return `in ${mins}m`
+  const hours = Math.round(mins / 60)
+  if (hours < 48) return `in ${hours}h`
+  return `in ${Math.round(hours / 24)}d`
+}
+
+function parseDateValue({ value_text, value_num }) {
+  const d = value_text ? new Date(value_text) : (value_num != null ? new Date(value_num * 1000) : null)
+  return d && !isNaN(d.getTime()) ? d : null
+}
+
 function formatValue(metric) {
   const { value_type, value_num, value_text, unit } = metric
   if (value_num == null && !value_text) return '—'
@@ -28,7 +46,10 @@ function formatValue(metric) {
     case 'currency': return `$${value_num.toFixed(2)}`
     case 'percent':  return `${value_num.toFixed(1)}%`
     case 'number':   return `${value_num.toLocaleString()}${unit ? ' ' + unit : ''}`
-    case 'date':     return value_text ?? new Date(value_num * 1000).toLocaleDateString()
+    case 'date': {
+      const d = parseDateValue(metric)
+      return d ? formatReset(d) : (value_text ?? '—')
+    }
     default:         return value_text ?? String(value_num)
   }
 }
@@ -110,7 +131,10 @@ function MetricRow({ metric, service, prevBill, readOnly }) {
             </span>
           )}
           {!editing && (
-            <span className={`text-xs font-medium ${isEmpty ? 'text-slate-600' : 'text-slate-200'}`}>
+            <span
+              className={`text-xs font-medium ${isEmpty ? 'text-slate-600' : 'text-slate-200'}`}
+              title={metric.value_type === 'date' ? (parseDateValue(metric)?.toLocaleString() ?? undefined) : undefined}
+            >
               {formatValue(metric)}
             </span>
           )}
@@ -179,20 +203,20 @@ function MetricRow({ metric, service, prevBill, readOnly }) {
 const SELECT_CLS = 'w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500'
 const BTN_PRIMARY = 'w-full px-2 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg transition-colors'
 
-function CatalogPanel({ service, onClose }) {
+// `catalogKey` is the provider's catalog index, fixed by the service's bound
+// provider — the user only picks a plan here, never the provider.
+function CatalogPanel({ service, catalogKey, onClose }) {
   const { data: catalog = {}, isLoading } = useCatalog()
   const apply = useApplyCatalogPlan()
-  const [providerKey, setProviderKey] = useState('')
   const [planKey, setPlanKey] = useState('')
 
-  const providers = Object.entries(catalog).filter(([k]) => k !== '_note')
-  const plans = providerKey && catalog[providerKey]?.plans
-    ? Object.entries(catalog[providerKey].plans)
+  const plans = catalog[catalogKey]?.plans
+    ? Object.entries(catalog[catalogKey].plans)
     : []
 
   async function handleApply() {
-    if (!providerKey || !planKey) return
-    await apply.mutateAsync({ serviceId: service.id, providerKey, planKey })
+    if (!planKey) return
+    await apply.mutateAsync({ serviceId: service.id, providerKey: catalogKey, planKey })
     onClose()
   }
 
@@ -202,27 +226,18 @@ function CatalogPanel({ service, onClose }) {
         <p className="text-xs text-slate-500">Loading catalog…</p>
       ) : (
         <>
-          <select value={providerKey} onChange={e => { setProviderKey(e.target.value); setPlanKey('') }} className={SELECT_CLS}>
-            <option value="">Select provider…</option>
-            {providers.map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
+          <select value={planKey} onChange={e => setPlanKey(e.target.value)} className={SELECT_CLS}>
+            <option value="">Select plan…</option>
+            {plans.map(([k, v]) => (
+              <option key={k} value={k}>{v.label} — ${v.price}/{v.billing_cycle}</option>
             ))}
           </select>
-
-          {plans.length > 0 && (
-            <select value={planKey} onChange={e => setPlanKey(e.target.value)} className={SELECT_CLS}>
-              <option value="">Select plan…</option>
-              {plans.map(([k, v]) => (
-                <option key={k} value={k}>{v.label} — ${v.price}/{v.billing_cycle}</option>
-              ))}
-            </select>
-          )}
 
           {apply.isError && <p className="text-xs text-red-400">Failed to apply plan</p>}
 
           <button
             onClick={handleApply}
-            disabled={!providerKey || !planKey || apply.isPending}
+            disabled={!planKey || apply.isPending}
             className={BTN_PRIMARY}
           >
             {apply.isPending ? 'Applying…' : 'Apply Plan'}
@@ -233,23 +248,20 @@ function CatalogPanel({ service, onClose }) {
   )
 }
 
-function ApiPanel({ service }) {
-  const { data: providers = [], isLoading } = useConnectorProviders()
+// `apiKey`/`authType` come from the service's bound provider — the connector is
+// fixed, so the user only supplies a token (or localOAuth consent), never a provider.
+function ApiPanel({ service, apiKey, authType }) {
   const upsert = useUpsertConnector()
   const sync = useSyncConnector()
   const { allowed } = useAllowOutbound()
-  const [providerKey, setProviderKey] = useState('')
   const [token, setToken] = useState('')
   const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
 
   const isApiConnected = service.connector_type === 'api'
 
-  const selected = providers.find(p => p.provider_key === providerKey)
-  const isLocalOAuth = selected?.authType === 'localOAuth'
-
-  // Reset consent whenever the chosen provider changes.
-  useEffect(() => { setConsent(false) }, [providerKey])
+  const providerKey = apiKey
+  const isLocalOAuth = authType === 'localOAuth'
 
   async function handleSave() {
     if (!providerKey || (isLocalOAuth ? !consent : !token)) return
@@ -278,20 +290,10 @@ function ApiPanel({ service }) {
   if (!isApiConnected) {
     return (
       <div className="space-y-1.5">
-        {isLoading ? (
-          <p className="text-xs text-slate-500">Loading…</p>
-        ) : (
-          <>
-            <select value={providerKey} onChange={e => setProviderKey(e.target.value)} className={SELECT_CLS}>
-              <option value="">Select provider…</option>
-              {providers.map(p => (
-                <option key={p.provider_key} value={p.provider_key}>{p.label}</option>
-              ))}
-            </select>
-            {isLocalOAuth ? (
+        {isLocalOAuth ? (
               <>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Reads the OAuth token Claude Code stores on this machine to fetch your plan usage % (read-only, same data as claude.ai/settings/usage). The token is never copied or stored by DevCost. Unofficial endpoint — may stop working.
+                  Reads the OAuth token Claude Code stores on this machine to fetch your plan usage % (read-only, same data as claude.ai/settings/usage). The token is never copied or stored by Levee. Unofficial endpoint — may stop working.
                 </p>
                 <label className="flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
                   <input
@@ -300,7 +302,7 @@ function ApiPanel({ service }) {
                     onChange={e => setConsent(e.target.checked)}
                     className="mt-0.5 accent-indigo-500"
                   />
-                  <span>I consent to DevCost reading Claude Code's local token</span>
+                  <span>I consent to Levee reading Claude Code's local token</span>
                 </label>
               </>
             ) : (
@@ -320,8 +322,6 @@ function ApiPanel({ service }) {
             >
               {upsert.isPending ? 'Saving…' : 'Save & Connect'}
             </button>
-          </>
-        )}
       </div>
     )
   }
@@ -366,8 +366,20 @@ function ApiPanel({ service }) {
 }
 
 function ConnectSection({ service }) {
+  const { data: providers = [] } = useProviders()
   const [open, setOpen] = useState(false)
+
+  const provider = providers.find(p => p.key === service.provider_key)
+  const hasCatalog = !!provider?.catalogKey
+  const hasApi = !!provider?.apiKey
+  const tabs = [hasCatalog && 'catalog', hasApi && 'api'].filter(Boolean)
+
+  // Default to the first method the provider supports; flips to a valid tab once
+  // the directory loads.
   const [tab, setTab] = useState('catalog')
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.includes(tab)) setTab(tabs[0])
+  }, [tabs, tab])
 
   const isAutoConnected = service.connector_type !== 'manual'
 
@@ -408,8 +420,9 @@ function ConnectSection({ service }) {
       {open && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
+            {/* Only show the method switcher when the provider offers both. */}
             <div className="flex gap-1">
-              {['catalog', 'api'].map(t => (
+              {tabs.length > 1 && tabs.map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -431,10 +444,13 @@ function ConnectSection({ service }) {
             </button>
           </div>
 
-          {tab === 'catalog'
-            ? <CatalogPanel service={service} onClose={() => setOpen(false)} />
-            : <ApiPanel service={service} />
-          }
+          {tabs.length === 0 ? (
+            <p className="text-xs text-slate-500">No connector available for this provider.</p>
+          ) : tab === 'catalog' && hasCatalog ? (
+            <CatalogPanel service={service} catalogKey={provider.catalogKey} onClose={() => setOpen(false)} />
+          ) : (
+            <ApiPanel service={service} apiKey={provider.apiKey} authType={provider.authType} />
+          )}
         </div>
       )}
     </div>
