@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Minimize2, Activity } from 'lucide-react'
+import { Minimize2 } from 'lucide-react'
 import { apiFetch } from './api'
 
 const queryClient = new QueryClient({
@@ -17,9 +17,9 @@ const WINDOW_H = 84
 // The window (PILL) is larger than the visible orb (ORB) so the GUTTER of
 // transparent pixels around it gives the full circle + an OUTER glow room to
 // render without being clipped to the square window rectangle.
-const ORB = 26
+const ORB = 36
 const GUTTER = 6
-const PILL = ORB + GUTTER * 2 // 38
+const PILL = ORB + GUTTER * 2 // 48
 
 function formatValue(slot) {
   if (!slot.service_id) return '—'
@@ -53,10 +53,6 @@ function Slot({ slot }) {
 const CARD_SHADOW =
   '0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 255, 156, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.04)'
 const CARD_BG = 'rgba(5, 8, 5, 0.78)'
-
-// Dock-orb chrome. A simple dark circle with a crisp green outline — no glow, so
-// it never blooms into a clipped green square at the window edge.
-const FAB_BG = 'rgba(1, 10, 7, 0.92)'
 
 // Pointer travel (px) below which a header press counts as a click, not a drag.
 const DRAG_THRESHOLD = 4
@@ -230,22 +226,15 @@ function OverlayInner() {
           startOverlayDrag(e, [PILL, PILL], () => expand(true), anchorRef.current)
         }
         title="Click to open · drag to move"
-        className="absolute flex items-center justify-center rounded-full text-emerald-300 hover:scale-110 active:scale-95 select-none"
+        className="absolute flex items-center justify-center select-none"
         style={{
           ...fabCorner,
           width: ORB, height: ORB,
-          // Force a true circle: the Matrix theme overrides `rounded-full` to a
-          // sharp 2px, which would render this status orb as a square.
-          borderRadius: '50%',
-          background: FAB_BG,
-          border: '1.5px solid rgba(0, 255, 156, 0.8)',
-          // Distinct transition name from the panel: the orb just fades in/out at
-          // its real 26px size, so it never gets stretched into the panel's box.
           viewTransitionName: phase === 'minimized' ? 'ov-fab' : 'none',
           display: phase === 'minimized' ? 'flex' : 'none',
         }}
       >
-        <Activity size={12} />
+        <img src="/levee-overlay.png" alt="" className="object-contain transition-transform hover:scale-110 active:scale-95" style={{ width: ORB - 6, height: ORB - 6 }} />
       </button>
 
       {/* Panel — scales uniformly into / out of the anchored corner (where the FAB

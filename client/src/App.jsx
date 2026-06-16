@@ -42,14 +42,12 @@ function Sidebar() {
   const vtNavigate = useViewTransitionNavigate()
   return (
     <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-      <div className="px-4 py-5 border-b border-slate-800">
-        <h1 className="text-sm font-bold tracking-tight text-slate-200">
-          <span className="text-emerald-400 glow">PS</span>{' '}
-          <span className="text-slate-200">C:\levee</span>
-          <span className="text-emerald-400">&gt;</span>
-          <span className="caret" />
-        </h1>
-        <p className="text-slate-500 text-xs mt-1">// local cost tracker</p>
+      <div className="px-4 py-4 border-b border-slate-800 flex items-center gap-3">
+        <img src="/levee-logo.png" alt="Levee" className="h-11 w-11 object-contain flex-shrink-0" />
+        <span className="font-mono text-base text-slate-200 tracking-tight">
+          <span className="text-emerald-400">&gt;</span> levee
+          <span className="ml-0.5 inline-block w-2 h-4 align-middle bg-emerald-400 animate-pulse" />
+        </span>
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
         {NAV.map(({ to, label, Icon }) => (

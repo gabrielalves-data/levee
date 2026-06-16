@@ -52,16 +52,20 @@ let mainWin       = null;
 let tray          = null;
 let serverProcess = null;
 
-// Build a simple 16×16 indigo square as the tray icon.
 function createTrayIcon() {
+  const logoPath = path.join(__dirname, '..', 'client', 'public', 'levee-logo.png');
+  if (fs.existsSync(logoPath)) {
+    return nativeImage.createFromPath(logoPath).resize({ width: 16, height: 16 });
+  }
+  // Fallback: indigo square if logo file is missing.
   const size = 16;
   const data = Buffer.alloc(size * size * 4);
   for (let i = 0; i < size * size; i++) {
     const off = i * 4;
-    data[off]     = 99;   // R  (#6366f1 indigo-500)
-    data[off + 1] = 102;  // G
-    data[off + 2] = 241;  // B
-    data[off + 3] = 255;  // A
+    data[off]     = 99;
+    data[off + 1] = 102;
+    data[off + 2] = 241;
+    data[off + 3] = 255;
   }
   return nativeImage.createFromBuffer(data, { width: size, height: size });
 }
