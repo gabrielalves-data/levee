@@ -179,7 +179,6 @@ function createMainWindow() {
 
   const isDev = !app.isPackaged;
   if (isDev) {
-    mainWin.webContents.openDevTools();
     mainWin.loadURL('http://127.0.0.1:5173');
   } else {
     mainWin.loadFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'));

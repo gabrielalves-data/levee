@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, ToggleLeft, ToggleRight, Download, Upload, Lock, Unlock } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useServices, useCreateService, usePatchService, useArchiveService } from '../hooks/useServices'
-import { useProviders } from '../hooks/useProviders'
 import { apiFetch } from '../api'
 import WidgetConfig from '../components/Widget'
 import AllowOutboundToggle from '../components/Settings'
@@ -38,134 +37,6 @@ function slugify(s) {
 
 function emptyMetric() {
   return { id: Date.now() + Math.random(), label: '', key: '', value_type: 'currency', value: '', unit: '' }
-}
-
-const CATEGORY_LABELS = {
-  cloud: 'Cloud', ai_model: 'AI Model', ai_api: 'AI API', tool: 'Dev Tool', custom: 'Custom',
-}
-
-// Provider-first: pick a known provider once — that defines the service. The actual
-// connection (plan or token/consent) happens on the service card, which no longer
-// asks for the provider again.
-function ProviderServiceForm({ onDone }) {
-  const { data: providers = [], isLoading } = useProviders()
-  const [providerKey, setProviderKey] = useState('')
-  const [name, setName]               = useState('')
-  const [nameTouched, setNameTouched] = useState(false)
-  const [budgetCap, setBudgetCap]     = useState('')
-  const [error, setError]             = useState('')
-  const [saving, setSaving]           = useState(false)
-
-  const createService = useCreateService()
-  const selected = providers.find(p => p.key === providerKey)
-
-  function pickProvider(key) {
-    setProviderKey(key)
-    const p = providers.find(x => x.key === key)
-    if (p && !nameTouched) setName(p.label)
-  }
-
-  async function submit(e) {
-    e.preventDefault()
-    if (!selected) {
-      setError('Pick a provider.')
-      return
-    }
-    setSaving(true)
-    setError('')
-    try {
-      await createService.mutateAsync({
-        name:         name.trim() || selected.label,
-        provider:     selected.label,
-        provider_key: selected.key,
-        category:     selected.category,
-        budget_cap:   budgetCap ? parseFloat(budgetCap) : null,
-      })
-      onDone()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <p className="text-xs text-slate-500">
-        Pick the provider — that becomes the service. You'll connect its plan or API on the service card.
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Provider *</span>
-          <select value={providerKey} onChange={e => pickProvider(e.target.value)}
-            className={INPUT_CLS} disabled={isLoading}>
-            <option value="">{isLoading ? 'Loading…' : 'Select provider…'}</option>
-            {providers.map(p => (
-              <option key={p.key} value={p.key}>{p.label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Name</span>
-          <input value={name}
-            onChange={e => { setName(e.target.value); setNameTouched(true) }}
-            className={INPUT_CLS} placeholder="Service name" />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Category</span>
-          <input value={selected ? (CATEGORY_LABELS[selected.category] ?? selected.category) : ''}
-            className={INPUT_CLS} disabled readOnly placeholder="—" />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Budget Cap ($)</span>
-          <input type="number" step="0.01" min="0" value={budgetCap}
-            onChange={e => setBudgetCap(e.target.value)}
-            className={INPUT_CLS} placeholder="0.00" />
-        </label>
-      </div>
-
-      {error && <p className="text-xs text-red-400">{error}</p>}
-
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onDone}
-          className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-          Cancel
-        </button>
-        <button type="submit" disabled={saving || !providerKey}
-          className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors">
-          {saving ? 'Saving…' : 'Add Service'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-// Wraps the two creation modes: provider-first (default) and free-text custom.
-function AddServiceForm({ onDone }) {
-  const [mode, setMode] = useState('provider')
-
-  return (
-    <div className="vt-pop bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-4">
-      <div className="flex items-center gap-1">
-        {[['provider', 'Connect a provider'], ['custom', 'Custom service']].map(([m, label]) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMode(m)}
-            className={`text-xs px-2.5 py-1 rounded transition-colors ${
-              mode === m ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {mode === 'provider'
-        ? <ProviderServiceForm onDone={onDone} />
-        : <CustomServiceForm onDone={onDone} />
-      }
-    </div>
-  )
 }
 
 function CustomServiceForm({ onDone }) {
@@ -585,21 +456,26 @@ export default function Settings() {
         <h2 className="text-xl font-semibold text-slate-100">
           <span className="text-emerald-400 glow">&gt;</span> settings
         </h2>
-        {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors">
-            <Plus size={13} /> Add Service
-          </button>
-        )}
       </div>
 
-      {showForm && (
-        <AddServiceForm onDone={() => setShowForm(false)} />
-      )}
-
       <section className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-300">Manage Services</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-slate-300">Manage Services</h3>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              <Plus size={12} /> Add custom service
+            </button>
+          )}
+        </div>
+
+        {showForm && (
+          <div className="vt-pop bg-slate-800 rounded-xl p-5 border border-slate-700">
+            <CustomServiceForm onDone={() => setShowForm(false)} />
+          </div>
+        )}
+
         {isLoading ? (
           <p className="text-xs text-slate-500">Loading…</p>
         ) : (

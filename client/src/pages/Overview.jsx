@@ -1,23 +1,17 @@
-import { useState } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { useServices, useCreateService } from '../hooks/useServices'
+import { useServices } from '../hooks/useServices'
 import { useSnapshots } from '../hooks/useSnapshots'
 import { useUpcomingResets } from '../hooks/useMetrics'
 import { computePace } from '../utils/pace'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-const CATEGORIES = ['cloud','ai_model','ai_api','tool','custom']
-const CAT_LABELS = { cloud:'Cloud', ai_model:'AI Model', ai_api:'AI API', tool:'Dev Tool', custom:'Custom' }
-
 const PACE_CONFIG = {
   on_track: { label: 'On track',    cls: 'text-emerald-400 bg-emerald-400/10 ring-1 ring-emerald-400/30' },
   warning:  { label: 'Warning',     cls: 'text-amber-400  bg-amber-400/10  ring-1 ring-amber-400/30'   },
   over:     { label: 'Over budget', cls: 'text-red-400    bg-red-400/10    ring-1 ring-red-400/30'     },
 }
-
-const INPUT_CLS = 'w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600'
 
 function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -61,86 +55,10 @@ function PaceCard({ pace, totalSpend, totalBudget }) {
   )
 }
 
-function QuickAddForm({ onDone }) {
-  const [name, setName]               = useState('')
-  const [provider, setProvider]       = useState('')
-  const [category, setCategory]       = useState('custom')
-  const [monthlyCost, setMonthlyCost] = useState('')
-  const [budgetCap, setBudgetCap]     = useState('')
-  const [error, setError]             = useState('')
-  const createService = useCreateService()
-
-  async function submit(e) {
-    e.preventDefault()
-    if (!name.trim() || !provider.trim()) { setError('Name and provider are required.'); return }
-    try {
-      await createService.mutateAsync({
-        name:         name.trim(),
-        provider:     provider.trim(),
-        category,
-        cost_model:   'flat',
-        monthly_cost: monthlyCost ? parseFloat(monthlyCost) : null,
-        budget_cap:   budgetCap   ? parseFloat(budgetCap)   : null,
-      })
-      onDone()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="vt-pop bg-slate-800 rounded-xl p-5 border border-slate-700">
-      <h3 className="text-sm font-semibold text-white mb-4">Quick Add Service</h3>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Name *</span>
-          <input value={name} onChange={e => setName(e.target.value)}
-            className={INPUT_CLS} placeholder="My Service" autoFocus />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Provider *</span>
-          <input value={provider} onChange={e => setProvider(e.target.value)}
-            className={INPUT_CLS} placeholder="Acme Inc." />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Category</span>
-          <select value={category} onChange={e => setCategory(e.target.value)} className={INPUT_CLS}>
-            {CATEGORIES.map(c => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Monthly Cost ($)</span>
-          <input type="number" step="0.01" min="0" value={monthlyCost}
-            onChange={e => setMonthlyCost(e.target.value)}
-            className={INPUT_CLS} placeholder="0.00" />
-        </label>
-        <label className="space-y-1 col-span-2 sm:col-span-1">
-          <span className="block text-xs text-slate-400">Budget Cap ($)</span>
-          <input type="number" step="0.01" min="0" value={budgetCap}
-            onChange={e => setBudgetCap(e.target.value)}
-            className={INPUT_CLS} placeholder="0.00" />
-        </label>
-      </div>
-      {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onDone}
-          className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-          Cancel
-        </button>
-        <button type="submit" disabled={createService.isPending}
-          className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors">
-          {createService.isPending ? 'Adding…' : 'Add Service'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
 export default function Overview() {
   const { data: services = [], isLoading, isError } = useServices()
   const { data: snapshots = [] }                    = useSnapshots(6)
   const { data: resets = [] }                       = useUpcomingResets()
-  const [showAdd, setShowAdd]                       = useState(false)
 
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Loading…</div>
   if (isError)   return <div className="p-6 text-red-400 text-sm">Failed to load services.</div>
@@ -160,15 +78,7 @@ export default function Overview() {
         <h2 className="text-xl font-semibold text-slate-100">
           <span className="text-emerald-400 glow">&gt;</span> overview
         </h2>
-        {!showAdd && (
-          <button onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors">
-            <Plus size={13} /> Quick Add
-          </button>
-        )}
       </div>
-
-      {showAdd && <QuickAddForm onDone={() => setShowAdd(false)} />}
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Total this month" value={`$${total.toFixed(2)}`} />
@@ -241,7 +151,7 @@ export default function Overview() {
         <div className="divide-y divide-slate-700/50">
           {services.length === 0 ? (
             <p className="px-5 py-4 text-sm text-slate-500">
-              No active services. Use Quick Add to get started.
+              No active services. Enable services from Settings to get started.
             </p>
           ) : (
             services.map(s => (
