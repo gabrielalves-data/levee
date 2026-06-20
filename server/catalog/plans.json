@@ -60,5 +60,128 @@
     "plans": {
       "Premium": { "label": "Premium", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
     }
+  },
+  "windsurf": {
+    "label": "Windsurf",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 15, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "tabnine": {
+    "label": "Tabnine",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 9, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "cody": {
+    "label": "Sourcegraph Cody",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 9, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "replit": {
+    "label": "Replit",
+    "plans": {
+      "Core": { "label": "Core", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "raycast": {
+    "label": "Raycast",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 8, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "warp": {
+    "label": "Warp",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 15, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "jetbrains_ai": {
+    "label": "JetBrains AI",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 10, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "jetbrains": {
+    "label": "JetBrains",
+    "plans": {
+      "AllProductsPack": { "label": "All Products Pack", "price": 28.90, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "github": {
+    "label": "GitHub",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 4, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Team": { "label": "Team (per user)", "price": 4, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "gitlab": {
+    "label": "GitLab",
+    "plans": {
+      "Premium": { "label": "Premium (per user)", "price": 29, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "notion": {
+    "label": "Notion",
+    "plans": {
+      "Plus": { "label": "Plus (per user)", "price": 10, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "slack": {
+    "label": "Slack",
+    "plans": {
+      "Pro": { "label": "Pro (per user)", "price": 8.75, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "figma": {
+    "label": "Figma",
+    "plans": {
+      "Professional": { "label": "Professional (per editor)", "price": 15, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "postman": {
+    "label": "Postman",
+    "plans": {
+      "Basic": { "label": "Basic (per user)", "price": 14, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "1password": {
+    "label": "1Password",
+    "plans": {
+      "Individual": { "label": "Individual", "price": 7.99, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Teams": { "label": "Teams (per user)", "price": 19.95, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "tailscale": {
+    "label": "Tailscale",
+    "plans": {
+      "Starter": { "label": "Starter (per user)", "price": 6, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "ngrok": {
+    "label": "ngrok",
+    "plans": {
+      "Personal": { "label": "Personal", "price": 8, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" },
+      "Pro": { "label": "Pro", "price": 20, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "supabase": {
+    "label": "Supabase",
+    "plans": {
+      "Pro": { "label": "Pro", "price": 25, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "netlify": {
+    "label": "Netlify",
+    "plans": {
+      "Pro": { "label": "Pro (per member)", "price": 19, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
+  },
+  "neon": {
+    "label": "Neon",
+    "plans": {
+      "Launch": { "label": "Launch", "price": 19, "currency": "USD", "billing_cycle": "monthly", "reset_cadence": "monthly" }
+    }
   }
 }

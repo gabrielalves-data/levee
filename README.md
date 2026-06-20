@@ -35,9 +35,14 @@ Each tracked service uses one of three connector types:
 ### Catalog plans
 
 Catalog covers fixed-price subscriptions. Apply a plan via `POST /api/catalog/apply`
-and DevCost sets the monthly bill, plan label, and next reset date automatically.
+and Levee sets the monthly bill, plan label, and next reset date automatically.
 
-Supported providers: Claude, ChatGPT, Gemini, Cursor, GitHub Copilot.
+Catalog providers cover AI subscriptions (Claude, ChatGPT, Gemini, Perplexity, Midjourney,
+Mistral Le Chat), AI coding assistants (Cursor, Windsurf, Tabnine, Cody, Replit, Raycast,
+Warp, JetBrains AI, v0), hosting/DB flat tiers (Supabase, Netlify, Neon), and dev-tool /
+SaaS subscriptions (GitHub, GitLab, JetBrains, Notion, Slack, Figma, Postman, 1Password,
+Tailscale, ngrok, GitHub Copilot). See [`server/catalog/plans.json`](server/catalog/plans.json)
+for the full list and prices.
 
 ### API connectors
 
@@ -45,19 +50,34 @@ Live connectors pull real metrics from provider APIs on demand and on the hourly
 Each connector declares the exact hostnames it may contact — the HTTP client rejects
 all other outbound requests.
 
-| Connector key    | Provider          | Auth type       |
-|------------------|-------------------|-----------------|
-| `anthropic`      | Anthropic API     | apiKey          |
-| `openai`         | OpenAI API        | apiKey          |
-| `aws`            | AWS Cost Explorer | awsKeyPair      |
-| `github_copilot` | GitHub Copilot    | apiKey          |
-| `vercel`         | Vercel            | apiKey          |
-| `sentry`         | Sentry            | apiKey          |
-| `railway`        | Railway           | apiKey          |
-| `planetscale`    | PlanetScale       | apiKey          |
-| `cloudflare`     | Cloudflare        | apiKey          |
-| `linear`         | Linear            | apiKey          |
-| `claude_plan`    | Claude Pro/Max plan usage | localOAuth (reads Claude Code's token) |
+| Connector key     | Provider                  | Category | Auth type       |
+|-------------------|---------------------------|----------|-----------------|
+| `anthropic_api`   | Anthropic API             | ai_api   | apiKey          |
+| `openai_api`      | OpenAI API                | ai_api   | apiKey          |
+| `openrouter`      | OpenRouter                | ai_api   | apiKey          |
+| `deepseek`        | DeepSeek                  | ai_api   | apiKey          |
+| `elevenlabs`      | ElevenLabs                | ai_api   | apiKey          |
+| `claude_plan`     | Claude Pro/Max plan usage | ai_model | localOAuth (reads Claude Code's token) |
+| `aws_cost`        | AWS Cost Explorer         | cloud    | awsKeyPair      |
+| `vercel`          | Vercel                    | cloud    | apiKey          |
+| `railway`         | Railway                   | cloud    | apiKey          |
+| `cloudflare`      | Cloudflare                | cloud    | apiKey          |
+| `planetscale`     | PlanetScale               | cloud    | apiKey          |
+| `digitalocean`    | DigitalOcean              | cloud    | apiKey          |
+| `azure`           | Azure                     | cloud    | oauthClientCredentials |
+| `mongodb_atlas`   | MongoDB Atlas             | cloud    | digest          |
+| `vultr`           | Vultr                     | cloud    | apiKey          |
+| `linode`          | Linode / Akamai           | cloud    | apiKey          |
+| `cloudinary`      | Cloudinary                | cloud    | basicAuth       |
+| `fastly`          | Fastly                    | cloud    | apiKey          |
+| `bunny`           | Bunny.net                 | cloud    | apiKey          |
+| `github_copilot`  | GitHub Copilot (org)      | tool     | apiKey          |
+| `github_actions`  | GitHub Actions            | tool     | apiKey          |
+| `linear`          | Linear                    | tool     | apiKey          |
+| `sentry`          | Sentry                    | tool     | apiKey          |
+| `twilio`          | Twilio                    | tool     | apiKey          |
+| `datadog`         | Datadog                   | tool     | apiKeyPair      |
+| `sendgrid`        | SendGrid                  | tool     | apiKey          |
 
 ## Security model
 
@@ -215,7 +235,7 @@ curl -s -X POST http://127.0.0.1:3001/api/catalog/apply \
 curl -s -X PUT http://127.0.0.1:3001/api/connectors/8 \
   -H "x-devcost-token: $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"providerKey":"anthropic","secret":"sk-ant-..."}'
+  -d '{"providerKey":"anthropic_api","secret":"sk-ant-..."}'
 
 # Trigger a manual sync
 curl -s -X POST http://127.0.0.1:3001/api/connectors/8/sync \

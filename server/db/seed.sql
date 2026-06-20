@@ -125,3 +125,33 @@ INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type
   (18, 'monthly_bill', 'Monthly bill', 'currency'),
   (18, 'errors_mtd',   'Errors MTD',   'number'),
   (18, 'plan',         'Plan',         'text');
+
+-- Track C — Manual (no API, variable amount). auto_available=0; user fills metrics by hand.
+
+-- Domains / DNS (annual renewals)
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (19, 'Namecheap', 'Namecheap', 'custom', 'flat',  1, 0),
+  (20, 'GoDaddy',   'GoDaddy',   'custom', 'flat',  1, 0);
+
+-- PaaS without a billing API (usage, no clean MTD endpoint)
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (21, 'Heroku', 'Salesforce', 'cloud', 'usage', 1, 0),
+  (22, 'Render', 'Render',      'cloud', 'usage', 1, 0),
+  (23, 'Fly.io', 'Fly.io',      'cloud', 'usage', 1, 0);
+
+-- Auth (Stripe-billed, no cost API)
+INSERT OR IGNORE INTO services (id, name, provider, category, cost_model, is_seed, auto_available) VALUES
+  (24, 'Auth0',  'Okta',   'tool', 'usage', 1, 0),
+  (25, 'Clerk',  'Clerk',  'tool', 'usage', 1, 0),
+  (26, 'WorkOS', 'WorkOS', 'tool', 'usage', 1, 0);
+
+-- Manual-service metrics (values left NULL — filled by user)
+INSERT OR IGNORE INTO service_metrics (service_id, metric_key, label, value_type) VALUES
+  (19, 'monthly_bill', 'Monthly bill', 'currency'),
+  (20, 'monthly_bill', 'Monthly bill', 'currency'),
+  (21, 'monthly_bill', 'Monthly bill', 'currency'),
+  (22, 'monthly_bill', 'Monthly bill', 'currency'),
+  (23, 'monthly_bill', 'Monthly bill', 'currency'),
+  (24, 'monthly_bill', 'Monthly bill', 'currency'),
+  (25, 'monthly_bill', 'Monthly bill', 'currency'),
+  (26, 'monthly_bill', 'Monthly bill', 'currency');

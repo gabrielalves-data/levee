@@ -123,6 +123,55 @@ const {
   connector: azureConnector,
 } = require('./azure');
 
+const {
+  mapAccountResponse: vultrMapAccount,
+  _setFetchForTest: vultrSetFetch,
+  connector: vultrConnector,
+} = require('./vultr');
+
+const {
+  mapAccountResponse: linodeMapAccount,
+  _setFetchForTest: linodeSetFetch,
+  connector: linodeConnector,
+} = require('./linode');
+
+const {
+  mapUsageResponse: ghaMapUsage,
+  mapActionsResponse: ghaMapActions,
+  _setFetchForTest: ghaSetFetch,
+  connector: ghaConnector,
+} = require('./github_actions');
+
+const {
+  mapUsageResponse: cloudinaryMapUsage,
+  _setFetchForTest: cloudinarySetFetch,
+  connector: cloudinaryConnector,
+} = require('./cloudinary');
+
+const {
+  mapSubscriptionResponse: elevenMapSub,
+  _setFetchForTest: elevenSetFetch,
+  connector: elevenConnector,
+} = require('./elevenlabs');
+
+const {
+  mapInvoiceResponse: fastlyMapInvoice,
+  _setFetchForTest: fastlySetFetch,
+  connector: fastlyConnector,
+} = require('./fastly');
+
+const {
+  mapBillingResponse: bunnyMapBilling,
+  _setFetchForTest: bunnySetFetch,
+  connector: bunnyConnector,
+} = require('./bunny');
+
+const {
+  mapCreditsResponse: sendgridMapCredits,
+  _setFetchForTest: sendgridSetFetch,
+  connector: sendgridConnector,
+} = require('./sendgrid');
+
 // Guard: tests must never hit real network.
 before(() => {
   anthropicSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
@@ -143,6 +192,14 @@ before(() => {
   datadogSetFetch(async  () => { throw new Error('[test] no real HTTP allowed'); });
   atlasSetFetch(async    () => { throw new Error('[test] no real HTTP allowed'); });
   azureSetFetch(async    () => { throw new Error('[test] no real HTTP allowed'); });
+  vultrSetFetch(async    () => { throw new Error('[test] no real HTTP allowed'); });
+  linodeSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
+  ghaSetFetch(async      () => { throw new Error('[test] no real HTTP allowed'); });
+  cloudinarySetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
+  elevenSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
+  fastlySetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
+  bunnySetFetch(async    () => { throw new Error('[test] no real HTTP allowed'); });
+  sendgridSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
 });
 
 // ─── Anthropic ────────────────────────────────────────────────────────────────
@@ -1727,6 +1784,533 @@ describe('azure — connector.fetch (mocked HTTP)', () => {
       (err) => {
         assert.match(err.message, /401/);
         assert.doesNotMatch(err.message, /cs_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Vultr ────────────────────────────────────────────────────────────────────
+
+describe('vultr — mapAccountResponse', () => {
+  it('reads pending_charges and balance from the nested account object', () => {
+    const { monthlyBill, accountBalance } = vultrMapAccount({
+      account: { pending_charges: 3.51, balance: -10.00 },
+    });
+    assert.ok(Math.abs(monthlyBill - 3.51) < 1e-10);
+    assert.ok(Math.abs(accountBalance - -10.00) < 1e-10);
+  });
+
+  it('tolerates a flat shape and returns zeros for empty body', () => {
+    assert.ok(Math.abs(vultrMapAccount({ pending_charges: 2 }).monthlyBill - 2) < 1e-10);
+    const { monthlyBill, accountBalance } = vultrMapAccount({});
+    assert.equal(monthlyBill, 0);
+    assert.equal(accountBalance, 0);
+  });
+});
+
+describe('vultr — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    vultrSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => vultrConnector.fetch({ secrets: { apiKey: 'vl_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill and account_balance from fixture data', async () => {
+    vultrSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ account: { pending_charges: 7.25, balance: 0 } }),
+    }));
+
+    const metrics = await vultrConnector.fetch({ secrets: { apiKey: 'vl_test' } });
+
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 7.25) < 1e-10);
+    assert.equal(bill.value_type, 'currency');
+    assert.equal(bill.unit, 'USD');
+
+    const bal = metrics.find(m => m.metric_key === 'account_balance');
+    assert.equal(bal.value_num, 0);
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    vultrSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => vultrConnector.fetch({ secrets: { apiKey: 'vl_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /vl_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Linode ───────────────────────────────────────────────────────────────────
+
+describe('linode — mapAccountResponse', () => {
+  it('reads balance_uninvoiced and balance', () => {
+    const { monthlyBill, accountBalance } = linodeMapAccount({
+      balance_uninvoiced: 14.20, balance: 5.00,
+    });
+    assert.ok(Math.abs(monthlyBill - 14.20) < 1e-10);
+    assert.ok(Math.abs(accountBalance - 5.00) < 1e-10);
+  });
+
+  it('returns zeros for empty body', () => {
+    const { monthlyBill, accountBalance } = linodeMapAccount({});
+    assert.equal(monthlyBill, 0);
+    assert.equal(accountBalance, 0);
+  });
+});
+
+describe('linode — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    linodeSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => linodeConnector.fetch({ secrets: { apiKey: 'ln_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill and account_balance from fixture data', async () => {
+    linodeSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ balance_uninvoiced: 31.99, balance: 0 }),
+    }));
+
+    const metrics = await linodeConnector.fetch({ secrets: { apiKey: 'ln_test' } });
+
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 31.99) < 1e-10);
+    assert.equal(bill.unit, 'USD');
+  });
+
+  it('throws a clean error (no token) on non-200 response', async () => {
+    linodeSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => linodeConnector.fetch({ secrets: { apiKey: 'ln_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /ln_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── GitHub Actions ─────────────────────────────────────────────────────────────
+
+describe('github_actions — mapUsageResponse', () => {
+  it('sums netAmount across usageItems', () => {
+    const { monthlyBill } = ghaMapUsage({
+      usageItems: [{ netAmount: 4.50 }, { netAmount: 1.25 }],
+    });
+    assert.ok(Math.abs(monthlyBill - 5.75) < 1e-10);
+  });
+
+  it('returns zero for missing usageItems', () => {
+    assert.equal(ghaMapUsage({}).monthlyBill, 0);
+  });
+});
+
+describe('github_actions — mapActionsResponse', () => {
+  it('reads total_minutes_used', () => {
+    assert.equal(ghaMapActions({ total_minutes_used: 1234 }).minutesUsed, 1234);
+  });
+
+  it('returns zero for empty body', () => {
+    assert.equal(ghaMapActions({}).minutesUsed, 0);
+  });
+});
+
+describe('github_actions — connector.fetch (mocked HTTP)', () => {
+  it('throws when org is missing from config', async () => {
+    await assert.rejects(
+      () => ghaConnector.fetch({ secrets: { apiKey: 'ghp_test' }, config: {} }),
+      /org/
+    );
+  });
+
+  it('propagates the allow_outbound gate error', async () => {
+    ghaSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => ghaConnector.fetch({ secrets: { apiKey: 'ghp_test' }, config: { org: 'acme' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill from the enhanced billing endpoint', async () => {
+    ghaSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ usageItems: [{ netAmount: 12.00 }, { netAmount: 3.00 }] }),
+    }));
+
+    const metrics = await ghaConnector.fetch({
+      secrets: { apiKey: 'ghp_test' },
+      config:  { org: 'acme' },
+    });
+
+    assert.equal(metrics.length, 1);
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 15.00) < 1e-10);
+    assert.equal(bill.unit, 'USD');
+  });
+
+  it('falls back to actions_minutes_mtd when enhanced billing 404s', async () => {
+    ghaSetFetch(async (url) => {
+      if (url.includes('/settings/billing/usage')) {
+        return { ok: false, status: 404, statusText: 'Not Found' };
+      }
+      return { ok: true, json: async () => ({ total_minutes_used: 4200 }) };
+    });
+
+    const metrics = await ghaConnector.fetch({
+      secrets: { apiKey: 'ghp_test' },
+      config:  { org: 'acme' },
+    });
+
+    assert.equal(metrics.length, 1);
+    const mins = metrics.find(m => m.metric_key === 'actions_minutes_mtd');
+    assert.equal(mins.value_num, 4200);
+    assert.equal(mins.value_type, 'number');
+    assert.equal(mins.unit, 'minutes');
+  });
+
+  it('throws a clean error (no token) on a non-404 enhanced billing error', async () => {
+    ghaSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => ghaConnector.fetch({ secrets: { apiKey: 'ghp_secret' }, config: { org: 'acme' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /ghp_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Cloudinary ─────────────────────────────────────────────────────────────────
+
+describe('cloudinary — mapUsageResponse', () => {
+  it('reads usage and used_percent from credits', () => {
+    const { creditsUsed, creditsUsedPct } = cloudinaryMapUsage({
+      credits: { usage: 7.5, limit: 25, used_percent: 30 },
+    });
+    assert.ok(Math.abs(creditsUsed - 7.5) < 1e-10);
+    assert.equal(creditsUsedPct, 30);
+  });
+
+  it('returns zeros for empty body', () => {
+    const { creditsUsed, creditsUsedPct } = cloudinaryMapUsage({});
+    assert.equal(creditsUsed, 0);
+    assert.equal(creditsUsedPct, 0);
+  });
+});
+
+describe('cloudinary — connector.fetch (mocked HTTP)', () => {
+  it('throws when cloudName is missing from config', async () => {
+    await assert.rejects(
+      () => cloudinaryConnector.fetch({ secrets: { apiKey: 'k', apiSecret: 's' }, config: {} }),
+      /cloudName/
+    );
+  });
+
+  it('propagates the allow_outbound gate error', async () => {
+    cloudinarySetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => cloudinaryConnector.fetch({
+        secrets: { apiKey: 'k', apiSecret: 's' },
+        config:  { cloudName: 'demo' },
+      }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns credits_used and credits_used_pct (no monthly_bill)', async () => {
+    cloudinarySetFetch(async () => ({
+      ok: true,
+      json: async () => ({ credits: { usage: 4.2, limit: 25, used_percent: 16.8 } }),
+    }));
+
+    const metrics = await cloudinaryConnector.fetch({
+      secrets: { apiKey: 'k', apiSecret: 's' },
+      config:  { cloudName: 'demo' },
+    });
+
+    const used = metrics.find(m => m.metric_key === 'credits_used');
+    assert.ok(Math.abs(used.value_num - 4.2) < 1e-10);
+    assert.equal(used.unit, 'credits');
+
+    const pct = metrics.find(m => m.metric_key === 'credits_used_pct');
+    assert.ok(Math.abs(pct.value_num - 16.8) < 1e-10);
+    assert.equal(pct.value_type, 'percent');
+
+    assert.equal(metrics.some(m => m.metric_key === 'monthly_bill'), false);
+  });
+
+  it('throws a clean error (no secret) on non-200 response', async () => {
+    cloudinarySetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => cloudinaryConnector.fetch({
+        secrets: { apiKey: 'k', apiSecret: 'topsecret' },
+        config:  { cloudName: 'demo' },
+      }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /topsecret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── ElevenLabs ─────────────────────────────────────────────────────────────────
+
+describe('elevenlabs — mapSubscriptionResponse', () => {
+  it('reads character usage, limit and tier', () => {
+    const { charactersUsed, charactersLimit, tier } = elevenMapSub({
+      tier: 'creator', character_count: 12000, character_limit: 100000,
+    });
+    assert.equal(charactersUsed, 12000);
+    assert.equal(charactersLimit, 100000);
+    assert.equal(tier, 'creator');
+  });
+
+  it('returns zeros and null tier for empty body', () => {
+    const { charactersUsed, charactersLimit, tier } = elevenMapSub({});
+    assert.equal(charactersUsed, 0);
+    assert.equal(charactersLimit, 0);
+    assert.equal(tier, null);
+  });
+});
+
+describe('elevenlabs — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    elevenSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => elevenConnector.fetch({ secrets: { apiKey: 'xi_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns characters and tier metrics (no monthly_bill)', async () => {
+    elevenSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ tier: 'pro', character_count: 55000, character_limit: 500000 }),
+    }));
+
+    const metrics = await elevenConnector.fetch({ secrets: { apiKey: 'xi_test' } });
+
+    const used = metrics.find(m => m.metric_key === 'characters_used_mtd');
+    assert.equal(used.value_num, 55000);
+    assert.equal(used.unit, 'characters');
+
+    const tier = metrics.find(m => m.metric_key === 'tier');
+    assert.equal(tier.value_text, 'pro');
+    assert.equal(tier.value_type, 'text');
+
+    assert.equal(metrics.some(m => m.metric_key === 'monthly_bill'), false);
+  });
+
+  it('omits tier metric when absent', async () => {
+    elevenSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ character_count: 100, character_limit: 1000 }),
+    }));
+
+    const metrics = await elevenConnector.fetch({ secrets: { apiKey: 'xi_test' } });
+    assert.equal(metrics.some(m => m.metric_key === 'tier'), false);
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    elevenSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => elevenConnector.fetch({ secrets: { apiKey: 'xi_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /xi_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Fastly ───────────────────────────────────────────────────────────────────
+
+describe('fastly — mapInvoiceResponse', () => {
+  it('parses monthly_transaction_amount string into USD', () => {
+    const { monthlyBill } = fastlyMapInvoice({ monthly_transaction_amount: '142.07' });
+    assert.ok(Math.abs(monthlyBill - 142.07) < 1e-10);
+  });
+
+  it('returns zero for empty body', () => {
+    assert.equal(fastlyMapInvoice({}).monthlyBill, 0);
+  });
+});
+
+describe('fastly — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    fastlySetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => fastlyConnector.fetch({ secrets: { apiKey: 'fa_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill from fixture data', async () => {
+    fastlySetFetch(async () => ({
+      ok: true,
+      json: async () => ({ monthly_transaction_amount: '88.50' }),
+    }));
+
+    const metrics = await fastlyConnector.fetch({ secrets: { apiKey: 'fa_test' } });
+
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 88.50) < 1e-10);
+    assert.equal(bill.value_type, 'currency');
+    assert.equal(bill.unit, 'USD');
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    fastlySetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => fastlyConnector.fetch({ secrets: { apiKey: 'fa_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /fa_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── Bunny.net ──────────────────────────────────────────────────────────────────
+
+describe('bunny — mapBillingResponse', () => {
+  it('reads ThisMonthCharges and Balance', () => {
+    const { monthlyBill, accountBalance } = bunnyMapBilling({
+      ThisMonthCharges: 3.74, Balance: 6700.42,
+    });
+    assert.ok(Math.abs(monthlyBill - 3.74) < 1e-10);
+    assert.ok(Math.abs(accountBalance - 6700.42) < 1e-10);
+  });
+
+  it('returns zeros for empty body', () => {
+    const { monthlyBill, accountBalance } = bunnyMapBilling({});
+    assert.equal(monthlyBill, 0);
+    assert.equal(accountBalance, 0);
+  });
+});
+
+describe('bunny — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    bunnySetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => bunnyConnector.fetch({ secrets: { apiKey: 'bn_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns monthly_bill and account_balance from fixture data', async () => {
+    bunnySetFetch(async () => ({
+      ok: true,
+      json: async () => ({ ThisMonthCharges: 12.34, Balance: 50.00 }),
+    }));
+
+    const metrics = await bunnyConnector.fetch({ secrets: { apiKey: 'bn_test' } });
+
+    const bill = metrics.find(m => m.metric_key === 'monthly_bill');
+    assert.ok(Math.abs(bill.value_num - 12.34) < 1e-10);
+    assert.equal(bill.unit, 'USD');
+
+    const bal = metrics.find(m => m.metric_key === 'account_balance');
+    assert.ok(Math.abs(bal.value_num - 50.00) < 1e-10);
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    bunnySetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => bunnyConnector.fetch({ secrets: { apiKey: 'bn_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /bn_secret/);
+        return true;
+      }
+    );
+  });
+});
+
+// ─── SendGrid ───────────────────────────────────────────────────────────────────
+
+describe('sendgrid — mapCreditsResponse', () => {
+  it('reads remain and used', () => {
+    const { creditsRemaining, creditsUsed } = sendgridMapCredits({
+      remain: 8000, total: 10000, used: 2000, overage: 0,
+    });
+    assert.equal(creditsRemaining, 8000);
+    assert.equal(creditsUsed, 2000);
+  });
+
+  it('returns zeros for empty body', () => {
+    const { creditsRemaining, creditsUsed } = sendgridMapCredits({});
+    assert.equal(creditsRemaining, 0);
+    assert.equal(creditsUsed, 0);
+  });
+});
+
+describe('sendgrid — connector.fetch (mocked HTTP)', () => {
+  it('propagates the allow_outbound gate error', async () => {
+    sendgridSetFetch(async () => {
+      throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
+    });
+    await assert.rejects(
+      () => sendgridConnector.fetch({ secrets: { apiKey: 'sg_test' } }),
+      /Outbound network is disabled/
+    );
+  });
+
+  it('returns credit metrics (no monthly_bill)', async () => {
+    sendgridSetFetch(async () => ({
+      ok: true,
+      json: async () => ({ remain: 4500, total: 5000, used: 500, overage: 0 }),
+    }));
+
+    const metrics = await sendgridConnector.fetch({ secrets: { apiKey: 'sg_test' } });
+
+    const remain = metrics.find(m => m.metric_key === 'credits_remaining');
+    assert.equal(remain.value_num, 4500);
+    assert.equal(remain.unit, 'credits');
+
+    const used = metrics.find(m => m.metric_key === 'credits_used');
+    assert.equal(used.value_num, 500);
+
+    assert.equal(metrics.some(m => m.metric_key === 'monthly_bill'), false);
+  });
+
+  it('throws a clean error (no key) on non-200 response', async () => {
+    sendgridSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
+    await assert.rejects(
+      () => sendgridConnector.fetch({ secrets: { apiKey: 'sg_secret' } }),
+      (err) => {
+        assert.match(err.message, /401/);
+        assert.doesNotMatch(err.message, /sg_secret/);
         return true;
       }
     );
