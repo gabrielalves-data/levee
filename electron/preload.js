@@ -19,6 +19,15 @@ try {
     overlayGetPosition:  ()     => ipcRenderer.invoke('overlay-get-position'),
     overlayMove:         (x, y, w, h, anchor) => ipcRenderer.send('overlay-move', x, y, w, h, anchor),
     notifyWidgetUpdate:  ()     => ipcRenderer.send('widget-updated'),
+    getAppVersion:   () => ipcRenderer.invoke('get-app-version'),
+    checkForUpdates: () => ipcRenderer.invoke('update-check'),
+    downloadUpdate:  () => ipcRenderer.invoke('update-download'),
+    installUpdate:   () => ipcRenderer.invoke('update-install'),
+    onUpdateStatus: (cb) => {
+      const handler = (_event, status) => cb(status);
+      ipcRenderer.on('update-status', handler);
+      return () => ipcRenderer.removeListener('update-status', handler);
+    },
     onWidgetUpdate: (cb) => {
       const handler = () => cb();
       ipcRenderer.on('widget-updated', handler);

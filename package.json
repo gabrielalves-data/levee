@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Privacy-first local developer cost tracker",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gabrielalves-data/Local-Cost-Management.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev:server": "node server/index.js",
@@ -11,10 +15,15 @@
     "electron": "electron .",
     "dev": "concurrently \"npm run dev:client\" \"wait-on http://127.0.0.1:5173 && npm run electron\"",
     "test": "vitest run --config client/vite.config.js",
-    "test:connectors": "node --test server/connectors/connectors.test.js"
+    "test:connectors": "node --test server/connectors/connectors.test.js",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always",
+    "postinstall": "electron-rebuild -f -w better-sqlite3-multiple-ciphers,keytar"
   },
   "dependencies": {
-    "better-sqlite3-multiple-ciphers": "^12.10.0",
+    "better-sqlite3-multiple-ciphers": "^12.11.1",
+    "electron-updater": "^6.8.9",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
     "keytar": "^7.9.0",
@@ -29,6 +38,7 @@
     "autoprefixer": "^10.5.0",
     "concurrently": "^10.0.3",
     "electron": "^42.3.3",
+    "electron-builder": "^25.1.8",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -41,5 +51,48 @@
   },
   "overrides": {
     "uuid": "^11.1.1"
+  },
+  "build": {
+    "appId": "com.gabriel.levee",
+    "productName": "Levee",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "gabrielalves-data",
+        "repo": "Local-Cost-Management"
+      }
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "client/dist/**",
+      "server/**",
+      "package.json",
+      "!**/*.test.js"
+    ],
+    "asarUnpack": [
+      "**/better-sqlite3-multiple-ciphers/**",
+      "**/keytar/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    }
   }
 }

@@ -2,14 +2,13 @@
 
 const {
   app, BrowserWindow, Tray, Menu,
-  globalShortcut, ipcMain, nativeImage,
+  globalShortcut, ipcMain, nativeImage, utilityProcess,
 } = require('electron');
 const path   = require('path');
 const crypto = require('crypto');
 const fs     = require('fs');
 const http   = require('http');
 const net    = require('net');
-const { spawn } = require('child_process');
 const {
   createOverlay,
   getOverlay,
@@ -18,6 +17,7 @@ const {
   anchoredPanelBounds,
   pillBoundsFor,
 } = require('./overlay');
+const { setupUpdater } = require('./updater');
 
 let keytar;
 try { keytar = require('keytar'); } catch { keytar = null; }
@@ -48,9 +48,24 @@ function saveConfig(cfg) {
   try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg), { mode: 0o600 }); } catch {}
 }
 
+// Identity so the window/taskbar reads "Levee" (not "Electron") and Windows
+// groups the taskbar entry / notifications under our own app id.
+app.setName('Levee');
+app.setAppUserModelId('com.gabriel.levee');
+
+// Window/taskbar icon. Packaged builds carry build/icon.*; dev falls back to the
+// PNG logo so the icon is correct even before packaging.
+const APP_ICON = app.isPackaged
+  ? path.join(__dirname, '..', 'client', 'dist', 'levee-logo.png')
+  : path.join(__dirname, '..', 'client', 'public', 'levee-logo.png');
+
 let mainWin       = null;
 let tray          = null;
 let serverProcess = null;
+// Closing the window hides to tray; only a real quit (tray Quit, or the updater's
+// quitAndInstall) sets this so the close handler stops intercepting.
+let isQuitting    = false;
+app.on('before-quit', () => { isQuitting = true; });
 
 function createTrayIcon() {
   const logoPath = path.join(__dirname, '..', 'client', 'public', 'levee-logo.png');
@@ -79,12 +94,11 @@ async function startServer() {
     }
   } catch { /* config absent or unreadable — open unencrypted */ }
 
-  // Run the server under system Node.js, not Electron's embedded Node.
-  // fork() inherits Electron's Node ABI, which mismatches native modules
-  // (better-sqlite3) compiled for system Node. spawn() with the system
-  // node binary avoids the ABI mismatch entirely.
-  const nodeBin = process.env.npm_node_execpath || 'node';
-  serverProcess = spawn(nodeBin, [path.join(__dirname, '..', 'server', 'index.js')], {
+  // Run the server under Electron's bundled Node via utilityProcess.fork, so a
+  // packaged app needs no system Node install. This requires the native modules
+  // (better-sqlite3-multiple-ciphers, keytar) to be built for Electron's ABI —
+  // handled by `electron-rebuild` in dev and electron-builder at package time.
+  serverProcess = utilityProcess.fork(path.join(__dirname, '..', 'server', 'index.js'), [], {
     env: {
       ...process.env,
       PORT:           String(PORT),
@@ -92,10 +106,9 @@ async function startServer() {
       LEVEE_DB_KEY: dbKey,
     },
     stdio: 'inherit',
-    windowsHide: true,
   });
-  serverProcess.on('error', (err) => {
-    console.error('[levee] server process error:', err.message);
+  serverProcess.on('exit', (code) => {
+    if (code) console.error(`[levee] server process exited with code ${code}`);
   });
 
   // Wait until OUR server (matching this launch's token) is answering before
@@ -142,6 +155,7 @@ function createMainWindow() {
   mainWin = new BrowserWindow({
     width: 1100,
     height: 700,
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -189,6 +203,7 @@ function createMainWindow() {
   }
 
   mainWin.on('close', (e) => {
+    if (isQuitting) return; // let the quit/install proceed
     e.preventDefault();
     mainWin.hide();
   });
@@ -231,6 +246,7 @@ app.whenReady().then(async () => {
   await startServer();
   createMainWindow();
   setupTray();
+  setupUpdater(() => mainWin);
 
   const preloadPath = path.join(__dirname, 'preload.js');
   const ov = createOverlay(preloadPath);

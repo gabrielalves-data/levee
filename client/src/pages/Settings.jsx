@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Trash2, ToggleLeft, ToggleRight, Download, Upload, Lock, Unlock } from 'lucide-react'
+import { Plus, Trash2, ToggleLeft, ToggleRight, Download, Upload, Lock, Unlock, RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useServices, useCreateService, usePatchService, useArchiveService } from '../hooks/useServices'
 import { apiFetch } from '../api'
@@ -446,6 +446,72 @@ function LaunchAtLoginToggle() {
   )
 }
 
+function UpdatesSection() {
+  const [version, setVersion] = useState('')
+  // status: { state: 'idle'|'checking'|'available'|'none'|'downloading'|'downloaded'|'error'|'dev', ... }
+  const [status, setStatus] = useState({ state: 'idle' })
+
+  useEffect(() => {
+    window.levee?.getAppVersion?.().then(v => v && setVersion(v))
+    // Main process pushes progress as the download runs.
+    const off = window.levee?.onUpdateStatus?.(setStatus)
+    return off
+  }, [])
+
+  async function check() {
+    setStatus({ state: 'checking' })
+    const res = await window.levee?.checkForUpdates?.()
+    // 'dev'/'error' resolve immediately; 'available'/'none' arrive via the event.
+    if (res && (res.state === 'dev' || res.state === 'error')) setStatus(res)
+  }
+
+  function download() {
+    setStatus({ state: 'downloading', percent: 0 })
+    window.levee?.downloadUpdate?.()
+  }
+
+  const busy = status.state === 'checking' || status.state === 'downloading'
+
+  return (
+    <div className="bg-slate-800/60 rounded-lg px-3 py-2.5 border border-slate-700/50 space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-white">Updates</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Current version {version ? `v${version}` : '—'} · checks only when you click
+          </p>
+        </div>
+        {status.state === 'downloaded' ? (
+          <button
+            onClick={() => window.levee?.installUpdate?.()}
+            className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-md px-3 py-1.5 transition-colors">
+            <RefreshCw size={13} /> Restart & install
+          </button>
+        ) : status.state === 'available' ? (
+          <button
+            onClick={download}
+            className="flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-md px-3 py-1.5 transition-colors">
+            <Download size={13} /> Download v{status.version}
+          </button>
+        ) : (
+          <button
+            onClick={check}
+            disabled={busy}
+            className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 transition-colors">
+            <RefreshCw size={13} className={busy ? 'animate-spin' : ''} /> Check for updates
+          </button>
+        )}
+      </div>
+
+      {status.state === 'none'        && <p className="text-xs text-emerald-400">You're on the latest version.</p>}
+      {status.state === 'downloading' && <p className="text-xs text-slate-400">Downloading… {status.percent ?? 0}%</p>}
+      {status.state === 'downloaded'  && <p className="text-xs text-emerald-400">v{status.version} ready — restart to apply.</p>}
+      {status.state === 'dev'         && <p className="text-xs text-slate-500">Updates are available only in the installed app.</p>}
+      {status.state === 'error'       && <p className="text-xs text-rose-400">Update check failed: {status.message}</p>}
+    </div>
+  )
+}
+
 export default function Settings() {
   const [showForm, setShowForm] = useState(false)
   const { data: services = [], isLoading } = useServices({ all: true })
@@ -490,6 +556,7 @@ export default function Settings() {
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-slate-300">App</h3>
         <LaunchAtLoginToggle />
+        <UpdatesSection />
       </section>
 
       <section className="space-y-3">
