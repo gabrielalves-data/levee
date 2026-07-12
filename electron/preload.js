@@ -35,11 +35,6 @@ try {
     },
     // These return a cleanup function the caller invokes on unmount.
     // contextBridge proxies returned functions across the bridge.
-    onCostUpdate: (cb) => {
-      const handler = (_event, data) => cb(data);
-      ipcRenderer.on('cost-update', handler);
-      return () => ipcRenderer.removeListener('cost-update', handler);
-    },
     onNavigate: (cb) => {
       const handler = (_event, route) => cb(route);
       ipcRenderer.on('navigate', handler);

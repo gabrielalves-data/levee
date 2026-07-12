@@ -3,7 +3,7 @@
 // Run with: node --test server/connectors/connectors.test.js
 // Uses only Node.js built-ins (node:test, node:assert) — no extra deps.
 
-const { describe, it, before } = require('node:test');
+const { describe, it, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 // Import connectors directly. Each module self-registers on first require();
@@ -1266,7 +1266,8 @@ describe('claude_plan — connector.fetch (mocked HTTP + token reader)', () => {
       return { ok: true, status: 200, json: async () => claudePlanFullBody };
     });
 
-    const metrics = await claudePlanConnector.fetch();
+    const config = { consentLocalToken: true };
+    const metrics = await claudePlanConnector.fetch({ config });
     assert.equal(metrics.length, 4);
     assert.equal(seenInit.headers.Authorization, 'Bearer tok_test');
     assert.equal(seenInit.headers['anthropic-beta'], 'oauth-2025-04-20');
@@ -1276,7 +1277,7 @@ describe('claude_plan — connector.fetch (mocked HTTP + token reader)', () => {
     claudePlanSetTokenReader(async () => 'tok_test');
     claudePlanSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
     await assert.rejects(
-      () => claudePlanConnector.fetch(),
+      () => claudePlanConnector.fetch({ config: { consentLocalToken: true } }),
       (err) => {
         assert.doesNotMatch(err.message, /tok_test/);
         return true;
@@ -1287,7 +1288,18 @@ describe('claude_plan — connector.fetch (mocked HTTP + token reader)', () => {
   it('propagates the expired-token error from the token reader', async () => {
     const expiredMsg = 'Claude Code OAuth token is expired. Open Claude Code to refresh it, then sync again.';
     claudePlanSetTokenReader(async () => { throw new Error(expiredMsg); });
-    await assert.rejects(() => claudePlanConnector.fetch(), /token is expired/);
+    await assert.rejects(
+      () => claudePlanConnector.fetch({ config: { consentLocalToken: true } }),
+      /token is expired/
+    );
+  });
+
+  it('rejects without reading the token if consent was not recorded', async () => {
+    let tokenReaderCalled = false;
+    claudePlanSetTokenReader(async () => { tokenReaderCalled = true; return 'tok_test'; });
+    await assert.rejects(() => claudePlanConnector.fetch({ config: {} }), /consent/);
+    await assert.rejects(() => claudePlanConnector.fetch(), /consent/);
+    assert.equal(tokenReaderCalled, false);
   });
 });
 
@@ -1444,7 +1456,7 @@ describe('twilio — mapBalanceResponse', () => {
 describe('twilio — connector.fetch (mocked HTTP)', () => {
   it('throws when accountSid is missing from config', async () => {
     await assert.rejects(
-      () => twilioConnector.fetch({ secrets: { apiKey: 'tw_test' }, config: {} }),
+      () => twilioConnector.fetch({ secrets: { apiKeySid: 'SKxxx', apiKeySecret: 'tw_test' }, config: {} }),
       /accountSid/
     );
   });
@@ -1454,7 +1466,7 @@ describe('twilio — connector.fetch (mocked HTTP)', () => {
       throw new Error('Outbound network is disabled. Enable "Allow outbound connections" in Settings → Privacy.');
     });
     await assert.rejects(
-      () => twilioConnector.fetch({ secrets: { apiKey: 'tw_test' }, config: { accountSid: 'ACxxx' } }),
+      () => twilioConnector.fetch({ secrets: { apiKeySid: 'SKxxx', apiKeySecret: 'tw_test' }, config: { accountSid: 'ACxxx' } }),
       /Outbound network is disabled/
     );
   });
@@ -1468,7 +1480,7 @@ describe('twilio — connector.fetch (mocked HTTP)', () => {
     });
 
     const metrics = await twilioConnector.fetch({
-      secrets: { apiKey: 'tw_test' },
+      secrets: { apiKeySid: 'SKxxx', apiKeySecret: 'tw_test' },
       config:  { accountSid: 'ACxxx' },
     });
 
@@ -1489,7 +1501,7 @@ describe('twilio — connector.fetch (mocked HTTP)', () => {
     });
 
     const metrics = await twilioConnector.fetch({
-      secrets: { apiKey: 'tw_test' },
+      secrets: { apiKeySid: 'SKxxx', apiKeySecret: 'tw_test' },
       config:  { accountSid: 'ACxxx' },
     });
     assert.equal(metrics.length, 1);
@@ -1499,7 +1511,7 @@ describe('twilio — connector.fetch (mocked HTTP)', () => {
   it('throws a clean error (no token) when the usage call fails', async () => {
     twilioSetFetch(async () => ({ ok: false, status: 401, statusText: 'Unauthorized' }));
     await assert.rejects(
-      () => twilioConnector.fetch({ secrets: { apiKey: 'tw_secret' }, config: { accountSid: 'ACxxx' } }),
+      () => twilioConnector.fetch({ secrets: { apiKeySid: 'SKxxx', apiKeySecret: 'tw_secret' }, config: { accountSid: 'ACxxx' } }),
       (err) => {
         assert.match(err.message, /401/);
         assert.doesNotMatch(err.message, /tw_secret/);
@@ -2355,5 +2367,54 @@ describe('provider directory', () => {
       if (p.catalogKey) assert.ok(catalogPlans[p.catalogKey], `missing catalog plans for ${p.catalogKey}`);
       if (p.apiKey) assert.ok(getRegisteredConnector(p.apiKey), `missing connector for ${p.apiKey}`);
     }
+  });
+});
+
+// ─── connectorFetch — redirect handling (host-allowlist bypass guard) ─────────
+
+const { connectorFetch } = require('./http');
+const fetchGateDb = require('../db/database');
+const getAllowOutboundRow = fetchGateDb.prepare(
+  "SELECT value FROM app_settings WHERE key = 'allow_outbound'"
+);
+const setAllowOutboundRow = fetchGateDb.prepare(
+  "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('allow_outbound', ?)"
+);
+
+describe('connectorFetch — redirect handling', () => {
+  let originalAllowOutbound;
+  let originalFetch;
+
+  before(() => {
+    originalAllowOutbound = getAllowOutboundRow.get()?.value ?? 'false';
+    setAllowOutboundRow.run('true');
+  });
+
+  after(() => {
+    setAllowOutboundRow.run(originalAllowOutbound);
+  });
+
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('requests with redirect: manual so allowlisted hops cannot be hopped away from', async () => {
+    let captured;
+    global.fetch = async (url, options) => { captured = options; return { status: 200 }; };
+    await connectorFetch('https://example.com/x', { hosts: ['example.com'] });
+    assert.equal(captured.redirect, 'manual');
+  });
+
+  it('throws instead of returning a 3xx response to the caller', async () => {
+    global.fetch = async () => ({ status: 302 });
+    await assert.rejects(
+      () => connectorFetch('https://example.com/x', { hosts: ['example.com'] }),
+      /redirect/i
+    );
+  });
+
+  it('passes through non-redirect responses unchanged', async () => {
+    global.fetch = async () => ({ status: 200, ok: true });
+    const res = await connectorFetch('https://example.com/x', { hosts: ['example.com'] });
+    assert.equal(res.status, 200);
   });
 });

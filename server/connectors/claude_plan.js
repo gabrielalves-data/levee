@@ -173,7 +173,13 @@ const connector = {
   secretAccounts: [],            // no keychain entries owned by Levee
   hosts:          HOSTS,
 
-  async fetch() {
+  async fetch({ config } = {}) {
+    // Consent is also checked in the PUT /api/connectors route when the
+    // connector is first saved, but re-checking here means a future code
+    // path that calls fetch() directly can never touch the token without it.
+    if (config?.consentLocalToken !== true) {
+      throw new Error('Local-token consent not granted for this service.');
+    }
     const token = await _readToken();
     const res = await _fetch(USAGE_URL, { hosts: HOSTS }, {
       headers: {

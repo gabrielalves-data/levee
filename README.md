@@ -4,12 +4,57 @@ Privacy-first, local-only desktop app for tracking developer costs — cloud, AI
 AI APIs, dev tools. No cloud sync, no accounts, no telemetry, zero outbound network calls
 by default. Supports both static catalog plans and live API-pulled metrics.
 
+## How this was built
+
+Levee was **directed by me and implemented with heavy AI assistance**. I set the goals
+and constraints — the idea itself, making it fully local with no cloud or telemetry, and
+keeping secrets as protected as possible — and chose the overall direction. The specific
+techniques that satisfy those goals (loopback-only binding, per-launch token auth,
+OS-keychain secrets, DNS-rebinding defence, CTE-only SQL) were largely proposed by AI;
+my role was to evaluate, question, and approve each one, and to reject what didn't fit.
+I treat AI as a fast pair-programmer, not an autopilot: I own the decisions even where
+I didn't originate the mechanism. This reflects how I prefer to work — setting direction
+and reviewing rigorously rather than line-by-line authorship.
+
 ## Setup
 
 ```sh
+npm install                # installs deps + rebuilds native modules (better-sqlite3, keytar) for Electron's ABI
 cd server && npm install   # install server deps
 npm run dev                # starts server + client + electron concurrently
 ```
+
+> The root `postinstall` runs `electron-rebuild` so the native modules match Electron's
+> Node ABI. The packaged app runs the server under Electron's bundled Node (via
+> `utilityProcess`), so **no system Node install is required** on the user's machine.
+
+## Building a distributable
+
+[electron-builder](https://www.electron.build/) packages the app per platform. Output lands
+in `release/`.
+
+```sh
+npm run pack       # unpacked dir build — fast, for local smoke-testing (no installer)
+npm run dist       # build installers for the current OS (no publish)
+npm run release    # build + publish to GitHub Releases (needs GH_TOKEN with repo scope)
+```
+
+| Platform | Targets |
+|----------|---------|
+| Windows  | NSIS installer, portable `.exe` |
+| macOS    | `.dmg` (developer-tools category) |
+| Linux    | AppImage, `.deb` |
+
+App id `com.gabriel.levee`; icon from `build/icon.png`. The publish target is the
+`gabrielalves-data/levee` GitHub repo.
+
+## Updates
+
+Opt-in and manual — Levee **never** checks for updates on its own. Settings → App →
+**Check for updates** is the only trigger; it reads the public GitHub Releases feed, then
+the user accepts the download and restarts to install. No update token is bundled in the
+app (the publish token is used only at `npm run release` upload time). In dev (unpackaged)
+the check reports that updates are only available in the installed app.
 
 ## Architecture
 
@@ -88,6 +133,7 @@ all other outbound requests.
 - API secrets stored in OS keychain via keytar — never written to SQLite or exports
 - Connector HTTP client enforces a per-connector hostname allowlist; no other outbound calls permitted
 - `localOAuth` connectors read a token another app already stores locally (explicit per-service consent required); the token is held in memory only during sync and never persisted
+- The auto-updater is the only outbound path outside a connector, and it fires **only** when the user clicks "Check for updates" — no automatic/background checks; no token bundled in the app
 
 ## Global hotkey
 

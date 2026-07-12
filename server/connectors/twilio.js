@@ -4,9 +4,11 @@
 // Endpoints (HTTP Basic auth):
 //   GET /2010-04-01/Accounts/{Sid}/Usage/Records/ThisMonth.json?Category=totalprice
 //   GET /2010-04-01/Accounts/{Sid}/Balance.json
-// Auth: Account SID + Auth Token (Twilio Console). The SID is not secret and is held
-//   in config; the Auth Token is the apiKey secret. Header:
-//     Authorization: Basic base64("{accountSid}:{authToken}")
+// Auth: standard API Key SID + Secret (Twilio Console → Account → API keys), NOT the
+//   account Auth Token — the Auth Token is Twilio's root credential (full account
+//   control) and is overkill for read-only usage/balance calls; a Standard API key is
+//   revocable and non-root. The Account SID is not secret and is held in config. Header:
+//     Authorization: Basic base64("{apiKeySid}:{apiKeySecret}")
 // Config: { accountSid: 'ACxxxx' }  — required.
 //
 // monthly_bill: usage_records[0].price  (USD, month-to-date total across all usage)
@@ -40,18 +42,20 @@ const connector = {
   label:          'Twilio',
   tier:           'api',
   authType:       'apiKey',
-  secretAccounts: ['apiKey'],
+  secretAccounts: ['apiKeySid', 'apiKeySecret'],
   hosts:          HOSTS,
   fields: [
-    { name: 'accountSid', label: 'Account SID', kind: 'config', required: true, placeholder: 'ACxxxxxxxx' },
-    { name: 'apiKey',     label: 'Auth token',  kind: 'secret', required: true },
+    { name: 'accountSid',    label: 'Account SID',    kind: 'config', required: true, placeholder: 'ACxxxxxxxx' },
+    { name: 'apiKeySid',     label: 'API key SID',    kind: 'secret', required: true, placeholder: 'SKxxxxxxxx' },
+    { name: 'apiKeySecret',  label: 'API key secret', kind: 'secret', required: true,
+      help: 'Create a Standard API key in Twilio Console → Account → API keys. Do not use the account Auth Token.' },
   ],
 
   async fetch({ secrets, config }) {
     const accountSid = config?.accountSid;
     if (!accountSid) throw new Error('Config missing required field: accountSid');
 
-    const auth    = Buffer.from(`${accountSid}:${secrets.apiKey}`).toString('base64');
+    const auth    = Buffer.from(`${secrets.apiKeySid}:${secrets.apiKeySecret}`).toString('base64');
     const headers = { 'Authorization': `Basic ${auth}` };
     const base    = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}`;
 

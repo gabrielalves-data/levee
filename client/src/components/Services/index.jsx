@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useServices } from '../../hooks/useServices'
 import ServiceCard from './ServiceCard'
 
@@ -12,6 +13,8 @@ const CATEGORY_LABELS = {
 
 export default function Services() {
   const [filter, setFilter] = useState('all')
+  const [searchParams] = useSearchParams()
+  const focusId = searchParams.get('focus')
   const { data: services = [], isLoading, isError } = useServices()
 
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Loading...</div>
@@ -44,7 +47,11 @@ export default function Services() {
 
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
         {visible.map(service => (
-          <ServiceCard key={service.id} service={service} />
+          <ServiceCard
+            key={service.id}
+            service={service}
+            focused={focusId != null && String(service.id) === focusId}
+          />
         ))}
       </div>
     </div>

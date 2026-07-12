@@ -7,16 +7,15 @@ const db       = require('../db/database');
 function checkBudgets() {
   const rows = db.prepare(`
     WITH budget_services AS (
-      SELECT s.id, s.name
+      SELECT s.id, s.name, s.budget_cap
       FROM   services s
       WHERE  s.active    = 1
         AND  s.budget_cap > 0
     ),
     bills AS (
       SELECT bs.id, bs.name, sm.value_num AS monthly_bill,
-             s.budget_cap
+             bs.budget_cap
       FROM   budget_services bs
-      JOIN   services        s  ON s.id  = bs.id
       LEFT JOIN service_metrics sm ON sm.service_id = bs.id
                                    AND sm.metric_key = 'monthly_bill'
     )

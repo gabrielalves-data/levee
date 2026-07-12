@@ -6,7 +6,7 @@ const crypto = require('crypto');
 // Electron main can pre-set LEVEE_TOKEN so it knows the value before spawning.
 const LAUNCH_TOKEN = process.env.LEVEE_TOKEN || crypto.randomBytes(32).toString('hex');
 
-const LOOPBACK      = new Set(['127.0.0.1', 'localhost', '::1']);
+const LOOPBACK      = new Set(['127.0.0.1', 'localhost']);
 // Allowed origins: loopback-only, any port (covers Vite :5173 in dev and file:// in Electron)
 const ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 

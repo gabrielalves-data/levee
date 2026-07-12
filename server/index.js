@@ -18,29 +18,50 @@ const { startCrons } = require('./cron/snapshot');
 // Load all connectors so they self-register on startup.
 require('./connectors/registry');
 
-const PORT = process.env.PORT || 3001;
+// Dev (npm run dev:server / Electron dev) passes a fixed PORT so the Vite
+// proxy target resolves. Packaged Electron omits it, so the OS assigns an
+// ephemeral port — reported back to the parent over the utilityProcess
+// message channel, closing the window where a squatter could bind the port
+// first (see startServer() in electron/main.js).
+const PORT = process.env.PORT ? Number(process.env.PORT) : 0;
 const HOST = '127.0.0.1';
 
 const app = express();
 
 app.use(helmet());
-app.use(express.json({ limit: '256kb' }));
 app.use(localGuard);
+
+// Backup import/export needs a larger body limit than the rest of the API:
+// months of snapshots plus metrics history can exceed the 256kb global cap,
+// which would 413 a user trying to restore their own backup.
+app.use('/api/backup', express.json({ limit: '10mb' }), backupRouter);
+
+app.use(express.json({ limit: '256kb' }));
 
 app.use('/api/services',    servicesRouter);
 app.use('/api/metrics',     metricsRouter);
 app.use('/api/widget',      widgetRouter);
 app.use('/api/snapshots',   snapshotsRouter);
 app.use('/api/settings',    settingsRouter);
-app.use('/api/backup',      backupRouter);
 app.use('/api/encryption',  encryptionRouter);
 app.use('/api/catalog',     catalogRouter);
 app.use('/api/connectors',  connectorsRouter);
 app.use('/api/providers',   providersRouter);
 
-app.listen(PORT, HOST, () => {
-  console.log(`[levee] listening on ${HOST}:${PORT}`);
+// Catches errors thrown by route handlers (e.g. a SQLite CHECK-constraint
+// violation that slipped past validation) so the raw constraint text never
+// reaches the client — just a generic message. Must be registered last and
+// keep all four args so Express recognizes it as error-handling middleware.
+app.use((err, req, res, next) => {
+  console.error('[levee] unhandled route error:', err.message);
+  res.status(500).json({ error: 'internal error' });
+});
+
+const server = app.listen(PORT, HOST, () => {
+  const { port } = server.address();
+  console.log(`[levee] listening on ${HOST}:${port}`);
   console.log('[levee] server ready (token set)');
+  if (process.parentPort) process.parentPort.postMessage({ type: 'ready', port });
   startCrons();
 });
 

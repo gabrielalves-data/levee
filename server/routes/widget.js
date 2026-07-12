@@ -37,7 +37,17 @@ router.get('/', (req, res) => {
 
 // PUT /api/widget/:slotIndex — assign or update a slot
 router.put('/:slotIndex', (req, res) => {
+  const slotIndex = Number(req.params.slotIndex);
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 3) {
+    return res.status(400).json({ error: 'slotIndex must be an integer between 0 and 3' });
+  }
+
   const { service_id, metric_key, label_override } = req.body;
+  if (service_id != null) {
+    const svc = db.prepare('SELECT id FROM services WHERE id = ?').get(service_id);
+    if (!svc) return res.status(400).json({ error: `Unknown service_id: ${service_id}` });
+  }
+
   db.prepare(`
     INSERT INTO widget_slots (slot_index, service_id, metric_key, label_override, updated_at)
     VALUES (?, ?, ?, ?, datetime('now'))
@@ -46,17 +56,21 @@ router.put('/:slotIndex', (req, res) => {
       metric_key     = excluded.metric_key,
       label_override = excluded.label_override,
       updated_at     = datetime('now')
-  `).run(req.params.slotIndex, service_id ?? null, metric_key ?? null, label_override ?? null);
+  `).run(slotIndex, service_id ?? null, metric_key ?? null, label_override ?? null);
   res.json({ ok: true });
 });
 
 // DELETE /api/widget/:slotIndex — clear a slot (nulls service/metric, keeps the row)
 router.delete('/:slotIndex', (req, res) => {
+  const slotIndex = Number(req.params.slotIndex);
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 3) {
+    return res.status(400).json({ error: 'slotIndex must be an integer between 0 and 3' });
+  }
   db.prepare(`
     UPDATE widget_slots
     SET service_id = NULL, metric_key = NULL, label_override = NULL, updated_at = datetime('now')
     WHERE slot_index = ?
-  `).run(req.params.slotIndex);
+  `).run(slotIndex);
   res.json({ ok: true });
 });
 

@@ -26,6 +26,10 @@ if (process.env.LEVEE_DB_KEY) {
     throw new Error('LEVEE_DB_KEY must be 64 lowercase hex characters');
   }
   db.pragma(`key="${dbKey}"`);
+  // Same-user malware could read the keychain directly anyway, so this isn't a
+  // security boundary — but there's no reason to keep the key sitting in this
+  // process's environment for its whole lifetime once the DB is opened.
+  delete process.env.LEVEE_DB_KEY;
 }
 
 db.pragma('journal_mode = WAL');
@@ -52,6 +56,16 @@ const addedAutoAvailable = !serviceColumns.has('auto_available');
 const addedProviderKey = !serviceColumns.has('provider_key');
 for (const [col, sql] of serviceMigrations) {
   if (!serviceColumns.has(col)) db.exec(sql);
+}
+
+// Idempotent migration: add `source` to pre-existing `service_metrics` tables
+// (see M5 in the review — tracks which write path last touched a metric so
+// the UI can lock only the metrics automation owns).
+const metricColumns = new Set(
+  db.prepare('PRAGMA table_info(service_metrics)').all().map((c) => c.name)
+);
+if (!metricColumns.has('source')) {
+  db.exec(`ALTER TABLE service_metrics ADD COLUMN source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','sync','catalog'))`);
 }
 
 // Backfill auto_available on pre-existing seed rows: every seeded service has a

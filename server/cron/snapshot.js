@@ -54,12 +54,37 @@ async function syncEnabledConnectors() {
   }
 }
 
+// If the machine was asleep/off at month-end, the 23:50 job below never fired.
+// On every start, back-fill last month's snapshot from current monthly_bill
+// values, but only for the first couple of days — past that, API-connected
+// services have likely already synced into the new month's MTD and the
+// numbers would no longer reflect the month that closed.
+function catchUpMissedSnapshot() {
+  const now = new Date();
+  if (now.getDate() > 2) return;
+  const prev = new Date(now);
+  prev.setMonth(prev.getMonth() - 1);
+  const year = prev.getFullYear();
+  const month = prev.getMonth() + 1;
+  const existing = db.prepare(
+    `SELECT 1 FROM monthly_snapshots WHERE year = ? AND month = ?`
+  ).get(year, month);
+  if (!existing) takeSnapshot(year, month);
+}
+
 function startCrons() {
-  // Snapshot previous month on the 1st at midnight
-  cron.schedule('0 0 1 * *', () => {
-    const prev = new Date();
-    prev.setMonth(prev.getMonth() - 1);
-    takeSnapshot(prev.getFullYear(), prev.getMonth() + 1);
+  // Snapshot the closing month at 23:50 on its last possible day (28-31),
+  // firing only when tomorrow rolls over to the 1st. A "snapshot on the 1st
+  // at 00:00" job would land on the same minute as the 6-hour sync cron below
+  // and race it: depending on ordering, the snapshot would record either a
+  // stale value or the new month's near-zero MTD instead of the month that
+  // just closed.
+  cron.schedule('50 23 28-31 * *', () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    if (tomorrow.getDate() !== 1) return;
+    takeSnapshot(now.getFullYear(), now.getMonth() + 1);
   });
 
   // Sync enabled API connectors every 6 hours (only when allow_outbound=true)
@@ -70,6 +95,7 @@ function startCrons() {
   });
 
   startAlertCron();
+  catchUpMissedSnapshot();
 }
 
 module.exports = { startCrons, takeSnapshot, syncEnabledConnectors };

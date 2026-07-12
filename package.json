@@ -5,7 +5,7 @@
   "description": "Privacy-first local developer cost tracker",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gabrielalves-data/Local-Cost-Management.git"
+    "url": "https://github.com/gabrielalves-data/levee.git"
   },
   "main": "electron/main.js",
   "scripts": {
@@ -59,7 +59,7 @@
       {
         "provider": "github",
         "owner": "gabrielalves-data",
-        "repo": "Local-Cost-Management"
+        "repo": "levee"
       }
     ],
     "directories": {

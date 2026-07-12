@@ -16,6 +16,8 @@ router.get('/providers', (_req, res) => {
 // PUT /api/connectors/:serviceId — upsert service_connectors row, set connector_type='api'
 router.put('/:serviceId', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
+  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+
   const { providerKey, config, secret, secrets } = req.body;
 
   if (!providerKey) return res.status(400).json({ error: 'providerKey required' });
@@ -31,6 +33,14 @@ router.put('/:serviceId', async (req, res) => {
   const svc = db.prepare('SELECT id FROM services WHERE id = ?').get(serviceId);
   if (!svc) return res.status(404).json({ error: 'Service not found' });
 
+  // Merge onto the existing config rather than replacing it wholesale — the
+  // current UI always resends every field, but re-saving with only secrets
+  // filled (e.g. a future "rotate credentials" form) would otherwise wipe out
+  // previously saved config like tenantId/org/accountSid.
+  const existing = db.prepare('SELECT config FROM service_connectors WHERE service_id = ?').get(serviceId);
+  const existingConfig = existing?.config ? JSON.parse(existing.config) : {};
+  const mergedConfig = { ...existingConfig, ...(config ?? {}) };
+
   db.prepare(`
     INSERT INTO service_connectors (service_id, provider_key, enabled, config)
     VALUES (?, ?, 1, ?)
@@ -38,7 +48,7 @@ router.put('/:serviceId', async (req, res) => {
       provider_key = excluded.provider_key,
       enabled      = 1,
       config       = excluded.config
-  `).run(serviceId, providerKey, config != null ? JSON.stringify(config) : null);
+  `).run(serviceId, providerKey, JSON.stringify(mergedConfig));
 
   db.prepare(`UPDATE services SET connector_type = 'api' WHERE id = ?`).run(serviceId);
 
@@ -60,6 +70,7 @@ router.put('/:serviceId', async (req, res) => {
 // DELETE /api/connectors/:serviceId — disable + deleteSecret
 router.delete('/:serviceId', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
+  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
 
   const row = db.prepare(
     'SELECT provider_key FROM service_connectors WHERE service_id = ?'
@@ -83,6 +94,7 @@ router.delete('/:serviceId', async (req, res) => {
 // POST /api/connectors/:serviceId/sync — manual sync trigger
 router.post('/:serviceId/sync', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
+  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
   const result = await syncService(serviceId);
   res.json(result);
 });

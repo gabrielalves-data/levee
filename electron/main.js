@@ -7,8 +7,6 @@ const {
 const path   = require('path');
 const crypto = require('crypto');
 const fs     = require('fs');
-const http   = require('http');
-const net    = require('net');
 const {
   createOverlay,
   getOverlay,
@@ -22,23 +20,13 @@ const { setupUpdater } = require('./updater');
 let keytar;
 try { keytar = require('keytar'); } catch { keytar = null; }
 
-// Packaged builds bind a random loopback port per launch so a well-known port
-// can't be squatted by another local process. Dev stays on 3001 to match the
-// Vite proxy target. Assigned in whenReady() before the server is spawned.
+// Packaged builds let the server bind an OS-assigned ephemeral port per
+// launch, reported back over the utilityProcess message channel — nothing
+// else can be squatting a port nobody had opened yet. Dev stays on 3001 to
+// match the Vite proxy target. PORT is set once startServer() resolves.
 let PORT           = 3001;
 const LAUNCH_TOKEN = crypto.randomBytes(32).toString('hex');
 
-// Ask the OS for a free loopback port (bind to 0, read it back, release it).
-function getFreePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-  });
-}
 const CONFIG_PATH  = path.join(require('os').homedir(), '.levee', 'config.json');
 
 function getConfig() {
@@ -98,55 +86,43 @@ async function startServer() {
   // packaged app needs no system Node install. This requires the native modules
   // (better-sqlite3-multiple-ciphers, keytar) to be built for Electron's ABI —
   // handled by `electron-rebuild` in dev and electron-builder at package time.
+  const env = {
+    ...process.env,
+    LEVEE_TOKEN:  LAUNCH_TOKEN,
+    LEVEE_DB_KEY: dbKey,
+  };
+  // Only dev pins a fixed port (Vite proxy target). Packaged builds omit PORT
+  // so server/index.js binds to 0 and the OS assigns an unused port.
+  if (!app.isPackaged) env.PORT = String(PORT);
+
   serverProcess = utilityProcess.fork(path.join(__dirname, '..', 'server', 'index.js'), [], {
-    env: {
-      ...process.env,
-      PORT:           String(PORT),
-      LEVEE_TOKEN:  LAUNCH_TOKEN,
-      LEVEE_DB_KEY: dbKey,
-    },
+    env,
     stdio: 'inherit',
+  });
+
+  // Wait for the server's own "ready" message over the utility-process
+  // message channel instead of polling HTTP: an HTTP probe can't tell our
+  // server apart from any other process that happens to answer on the same
+  // port, so a squatter would get accepted and receive the launch token plus
+  // every API payload. The message channel is unforgeable by another process.
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('[levee] server did not start within 15 s'));
+    }, 15_000);
+    serverProcess.once('message', (msg) => {
+      if (msg?.type === 'ready' && Number.isInteger(msg.port)) {
+        PORT = msg.port;
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+    serverProcess.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`[levee] server process exited with code ${code}`));
+    });
   });
   serverProcess.on('exit', (code) => {
     if (code) console.error(`[levee] server process exited with code ${code}`);
-  });
-
-  // Wait until OUR server (matching this launch's token) is answering before
-  // loading the UI. Sending the token lets us tell our server apart from a
-  // stale zombie on the same port: a foreign server replies 401, so we keep
-  // waiting and fail loudly on timeout instead of silently serving the UI
-  // against the wrong process.
-  await new Promise((resolve, reject) => {
-    const deadline = Date.now() + 15_000;
-    const check = () => {
-      const req = http.request(
-        { host: '127.0.0.1', port: PORT, path: '/', method: 'GET',
-          headers: { 'x-levee-token': LAUNCH_TOKEN } },
-        (res) => {
-          res.resume();
-          if (res.statusCode === 401) {
-            // Port held by a different server (wrong token). Don't accept it.
-            if (Date.now() >= deadline) {
-              reject(new Error(
-                `[levee] port ${PORT} is held by another process with a ` +
-                `different token (stale server?). Close it and relaunch.`));
-            } else {
-              setTimeout(check, 200);
-            }
-          } else {
-            resolve(); // our token accepted (404 for "/" is expected)
-          }
-        });
-      req.on('error', () => {
-        if (Date.now() >= deadline) {
-          reject(new Error('[levee] server did not start within 15 s'));
-        } else {
-          setTimeout(check, 150);
-        }
-      });
-      req.end();
-    };
-    setTimeout(check, 150);
   });
   console.log('[levee] server ready');
 }
@@ -172,9 +148,13 @@ function createMainWindow() {
     // Dev loads from Vite (:5173); prod loads from file://.
     // Vite needs 'unsafe-inline' for React's refresh preamble and ws: for HMR.
     const fromVite = details.url.startsWith('http://127.0.0.1:5173');
+    // The packaged app's port is known by the time this handler runs (PORT is
+    // set once startServer() resolves, before createMainWindow() is called),
+    // so pin connect-src to it instead of a wildcard — a wildcard would let a
+    // compromised renderer talk to any other app's loopback port.
     const csp = fromVite
       ? "default-src 'self'; connect-src http://127.0.0.1:3001 http://127.0.0.1:5173 ws://127.0.0.1:5173; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
-      : "default-src 'self'; connect-src http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'";
+      : `default-src 'self'; connect-src http://127.0.0.1:${PORT}; script-src 'self'; style-src 'self' 'unsafe-inline'`;
 
     // Strip any pre-existing CSP header (any casing) so ours is the only one —
     // multiple CSP headers are combined by the most-restrictive intersection.
@@ -216,7 +196,7 @@ function setupTray() {
     { label: 'Open Levee',   click: () => { mainWin?.show(); mainWin?.focus(); } },
     { label: 'Toggle Overlay', click: () => toggleOverlay() },
     { type: 'separator' },
-    { label: 'Quit', click: () => app.exit(0) },
+    { label: 'Quit', click: () => app.quit() },
   ]));
   tray.on('double-click', () => { mainWin?.show(); mainWin?.focus(); });
 }
@@ -240,9 +220,6 @@ app.whenReady().then(async () => {
     saveConfig({ ...cfg, firstRunDone: true });
   }
 
-  // Random port in the packaged app; fixed 3001 in dev so the Vite proxy resolves.
-  if (app.isPackaged) PORT = await getFreePort();
-
   await startServer();
   createMainWindow();
   setupTray();
@@ -260,10 +237,10 @@ app.whenReady().then(async () => {
 ipcMain.handle('get-token', () => LAUNCH_TOKEN);
 ipcMain.handle('get-port',  () => PORT);
 
-ipcMain.on('open-dashboard', () => {
+ipcMain.on('open-dashboard', (_e, serviceId) => {
   mainWin?.show();
   mainWin?.focus();
-  mainWin?.webContents.send('navigate', '/services');
+  mainWin?.webContents.send('navigate', serviceId ? `/services?focus=${serviceId}` : '/services');
 });
 
 ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);

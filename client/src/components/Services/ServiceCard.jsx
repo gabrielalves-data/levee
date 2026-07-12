@@ -1,9 +1,9 @@
 import * as Icons from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMetrics, useUpsertMetric } from '../../hooks/useMetrics'
 import { useSnapshots } from '../../hooks/useSnapshots'
 import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
-import { useAllowOutbound, useUpsertConnector, useSyncConnector } from '../../hooks/useConnectors'
+import { useAllowOutbound, useUpsertConnector, useSyncConnector, useDeleteConnector } from '../../hooks/useConnectors'
 import { useProviders } from '../../hooks/useProviders'
 
 const CATEGORY_STYLES = {
@@ -284,6 +284,7 @@ function FormField({ field, value, onChange }) {
 function ApiPanel({ service, apiKey, authType, fields }) {
   const upsert = useUpsertConnector()
   const sync = useSyncConnector()
+  const disconnect = useDeleteConnector()
   const { allowed } = useAllowOutbound()
   const [values, setValues] = useState({})
   const [consent, setConsent] = useState(false)
@@ -329,6 +330,15 @@ function ApiPanel({ service, apiKey, authType, fields }) {
       await sync.mutateAsync(service.id)
     } catch {
       setError('Sync failed')
+    }
+  }
+
+  async function handleDisconnect() {
+    setError('')
+    try {
+      await disconnect.mutateAsync(service.id)
+    } catch {
+      setError('Failed to disconnect')
     }
   }
 
@@ -393,15 +403,26 @@ function ApiPanel({ service, apiKey, authType, fields }) {
       </div>
 
       <div className="space-y-1">
-        <button
-          onClick={handleSync}
-          disabled={!allowed || sync.isPending}
-          title={!allowed ? 'Enable outbound connections in Settings to sync' : undefined}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white rounded-lg transition-colors"
-        >
-          <Icons.RefreshCw size={11} className={sync.isPending ? 'animate-spin' : ''} />
-          {sync.isPending ? 'Syncing…' : 'Sync now'}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleSync}
+            disabled={!allowed || sync.isPending}
+            title={!allowed ? 'Enable outbound connections in Settings to sync' : undefined}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white rounded-lg transition-colors"
+          >
+            <Icons.RefreshCw size={11} className={sync.isPending ? 'animate-spin' : ''} />
+            {sync.isPending ? 'Syncing…' : 'Sync now'}
+          </button>
+          <button
+            onClick={handleDisconnect}
+            disabled={disconnect.isPending}
+            title="Disconnect and remove stored credentials"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs bg-slate-700 hover:bg-red-900/60 disabled:opacity-40 text-slate-300 hover:text-red-300 rounded-lg transition-colors"
+          >
+            <Icons.Unplug size={11} />
+            {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        </div>
         {!allowed && (
           <p className="text-xs text-amber-500">Enable outbound connections in Settings to sync</p>
         )}
@@ -505,24 +526,37 @@ function ConnectSection({ service }) {
 
 // ─── ServiceCard ──────────────────────────────────────────────────────────────
 
-export default function ServiceCard({ service }) {
+export default function ServiceCard({ service, focused = false }) {
   const { data: metrics = [], isLoading } = useMetrics(service.id)
   const { data: snapshots = [] } = useSnapshots(2)
+  const cardRef = useRef(null)
+
+  // Deep-link target from an overlay slot click (see App.jsx's NavigationListener) —
+  // scroll it into view once on arrival so the user doesn't have to hunt for it.
+  useEffect(() => {
+    if (focused) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [focused])
 
   const lastSnapshot = snapshots[snapshots.length - 1]
   const prevBill = lastSnapshot?.breakdown?.find(r => r.id === service.id)?.monthly_bill ?? null
 
-  // Services with auto retrieval are filled by catalog/API connectors (read-only).
-  // Services without it are entered by hand.
-  const autoAvailable   = !!service.auto_available
-  const metricsReadOnly = autoAvailable
+  // Services with auto retrieval can offer a Connect section, but that doesn't mean
+  // every metric on the card is automation-owned — a seeded metric the connector
+  // never writes (e.g. a catalog-only service's usage metric) stays user-editable.
+  // Each metric locks individually based on which write path last touched it.
+  const autoAvailable = !!service.auto_available
 
   const IconComponent = (service.icon && Icons[service.icon]) || Icons.Package
   const categoryStyle = CATEGORY_STYLES[service.category] ?? CATEGORY_STYLES.custom
   const categoryLabel = CATEGORY_LABELS[service.category] ?? service.category
 
   return (
-    <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex flex-col gap-3">
+    <div
+      ref={cardRef}
+      className={`bg-slate-800 rounded-xl p-4 border flex flex-col gap-3 transition-colors ${
+        focused ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-slate-700'
+      }`}
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 bg-slate-700 rounded-lg">
@@ -548,7 +582,7 @@ export default function ServiceCard({ service }) {
               metric={m}
               service={service}
               prevBill={m.metric_key === 'monthly_bill' ? prevBill : null}
-              readOnly={metricsReadOnly}
+              readOnly={m.source !== 'manual'}
             />
           ))}
         </div>

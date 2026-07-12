@@ -51,12 +51,17 @@ async function connectorFetch(url, connector, options = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, {
+    const res = await fetch(url, {
       method,
       headers: { 'User-Agent': USER_AGENT, ...headers },
       body: body ?? undefined,
       signal: controller.signal,
+      redirect: 'manual', // the host allowlist must hold for every hop
     });
+    if (res.status >= 300 && res.status < 400) {
+      throw new Error('Connector received a redirect; refusing to follow.');
+    }
+    return res;
   } catch (err) {
     if (err.name === 'AbortError') {
       throw new Error(`Connector request timed out after ${timeoutMs}ms.`);

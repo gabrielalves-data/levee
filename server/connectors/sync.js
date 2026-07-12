@@ -6,14 +6,15 @@ const { getSecret } = require('../secrets');
 
 const upsertMetric = db.prepare(`
   INSERT INTO service_metrics
-    (service_id, metric_key, label, value_type, value_num, value_text, unit, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    (service_id, metric_key, label, value_type, value_num, value_text, unit, source, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, 'sync', datetime('now'))
   ON CONFLICT (service_id, metric_key) DO UPDATE SET
     label      = excluded.label,
     value_type = excluded.value_type,
     value_num  = excluded.value_num,
     value_text = excluded.value_text,
     unit       = excluded.unit,
+    source     = excluded.source,
     updated_at = datetime('now')
 `);
 
@@ -63,7 +64,11 @@ async function syncService(serviceId) {
   try {
     const secrets = {};
     for (const account of connector.secretAccounts ?? []) {
-      secrets[account] = await getSecret(`connector:${serviceId}:${account}`);
+      const value = await getSecret(`connector:${serviceId}:${account}`);
+      if (value == null) {
+        throw new Error(`Missing credential "${account}" — open the service card and reconnect.`);
+      }
+      secrets[account] = value;
     }
     const config = row.config ? JSON.parse(row.config) : {};
     const metrics = await connector.fetch({ secrets, config });

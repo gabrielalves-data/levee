@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS service_metrics (
   value_num   REAL,
   value_text  TEXT,
   unit        TEXT,
+  -- Which write path last touched this metric — lets the UI lock only the
+  -- metrics automation owns instead of every metric on a connected service.
+  source      TEXT    NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','sync','catalog')),
   updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE (service_id, metric_key)
 );

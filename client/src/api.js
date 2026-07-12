@@ -1,4 +1,4 @@
-let _token = import.meta.env.VITE_LEVEE_TOKEN || '';
+let _token = '';
 
 // Base URL for API calls. Empty in dev so requests are relative and ride the
 // Vite proxy. In the packaged app the UI loads from file://, where relative

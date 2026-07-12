@@ -11,6 +11,9 @@ const ALLOWED_FIELDS = new Set([
   'monthly_cost', 'budget_cap', 'billing_day', 'icon', 'active',
 ]);
 
+const VALID_CATEGORY   = new Set(['cloud', 'ai_model', 'ai_api', 'tool', 'custom']);
+const VALID_COST_MODEL = new Set(['flat', 'usage', 'hybrid']);
+
 // GET /api/services          → active only
 // GET /api/services?all=1    → active + inactive
 router.get('/', (req, res) => {
@@ -68,6 +71,12 @@ router.post('/', (req, res) => {
   if (!name || !provider || !resolvedCategory) {
     return res.status(400).json({ error: 'name, provider, category required' });
   }
+  if (!VALID_CATEGORY.has(resolvedCategory)) {
+    return res.status(400).json({ error: `Invalid category: ${resolvedCategory}` });
+  }
+  if (cost_model !== undefined && !VALID_COST_MODEL.has(cost_model)) {
+    return res.status(400).json({ error: `Invalid cost_model: ${cost_model}` });
+  }
   const result = db.prepare(`
     INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, icon, provider_key, auto_available)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -81,6 +90,13 @@ router.post('/', (req, res) => {
 router.patch('/:id', (req, res) => {
   const fields = Object.keys(req.body).filter(k => ALLOWED_FIELDS.has(k));
   if (fields.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+
+  if (req.body.category !== undefined && !VALID_CATEGORY.has(req.body.category)) {
+    return res.status(400).json({ error: `Invalid category: ${req.body.category}` });
+  }
+  if (req.body.cost_model !== undefined && !VALID_COST_MODEL.has(req.body.cost_model)) {
+    return res.status(400).json({ error: `Invalid cost_model: ${req.body.cost_model}` });
+  }
 
   // Column names come from the whitelist, never from raw user input — safe to interpolate.
   const setClause = fields.map(f => `${f} = ?`).join(', ');
