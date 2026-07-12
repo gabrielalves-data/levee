@@ -32,6 +32,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'Personal access token', kind: 'secret', required: true,
+      help: 'Create a scoped token with only billing:read access (Read-only) — no write access needed.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

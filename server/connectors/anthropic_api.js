@@ -78,6 +78,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'Admin API key', kind: 'secret', required: true,
+      help: 'Admin API keys are org-powerful (no read-only scope exists yet) — Levee only calls the cost/usage report endpoints, never anything else.' },
+  ],
 
   async fetch({ secrets }) {
     const { starting_at, ending_at } = monthBounds();

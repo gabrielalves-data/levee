@@ -3,8 +3,8 @@
 const { Router } = require('express');
 const db = require('../db/database');
 const { list: listConnectors, get: getConnector } = require('../connectors/registry');
-const { setSecret, deleteSecret } = require('../secrets');
-const { syncService } = require('../connectors/sync');
+const { setSecret, getSecret, deleteSecret } = require('../secrets');
+const { syncService, upsertMetrics } = require('../connectors/sync');
 
 const router = Router();
 
@@ -97,6 +97,39 @@ router.post('/:serviceId/sync', async (req, res) => {
   if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
   const result = await syncService(serviceId);
   res.json(result);
+});
+
+// POST /api/connectors/:serviceId/audit — opt-in least-privilege credential audit.
+// Only active for connectors that declare an `audit` hook (currently AWS only).
+router.post('/:serviceId/audit', async (req, res) => {
+  const serviceId = Number(req.params.serviceId);
+  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+
+  const row = db.prepare(
+    'SELECT provider_key FROM service_connectors WHERE service_id = ? AND enabled = 1'
+  ).get(serviceId);
+  if (!row) return res.status(404).json({ error: 'Connector not found' });
+
+  const connector = getConnector(row.provider_key);
+  if (!connector?.audit) {
+    return res.status(400).json({ error: `Connector "${row.provider_key}" does not support an audit.` });
+  }
+
+  try {
+    const secrets = {};
+    for (const account of connector.secretAccounts ?? []) {
+      const value = await getSecret(`connector:${serviceId}:${account}`);
+      if (value == null) {
+        return res.status(400).json({ error: `Missing credential "${account}" — open the service card and reconnect.` });
+      }
+      secrets[account] = value;
+    }
+    const metrics = await connector.audit({ secrets });
+    upsertMetrics(serviceId, metrics);
+    res.json({ ok: true, metrics });
+  } catch (err) {
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
 });
 
 module.exports = router;

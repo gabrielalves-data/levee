@@ -54,6 +54,20 @@
  *   needs to contact.
  *   e.g. ['api.openai.com'] or ['ce.us-east-1.amazonaws.com']
  *
+ * syncIntervalHours {number}  (optional; default 6)
+ *   How often syncEnabledConnectors() (server/cron/snapshot.js) actually calls
+ *   fetch() for this connector, independent of the cron's own 6-hour tick.
+ *   Use this to slow down connectors whose provider bills per API call (e.g.
+ *   AWS Cost Explorer at $0.01/request) — MTD cost doesn't need 4x/day freshness.
+ *
+ * audit          {async ({ secrets, config }) => metric[]}  (optional)
+ *   Opt-in least-privilege check for this connector's credential — never
+ *   called during a normal sync, only from an explicit "Audit key
+ *   permissions" UI action (POST /api/connectors/:serviceId/audit). Returns
+ *   metrics the same shape as fetch(). See aws_audit.js for the reference
+ *   implementation (sentinel-probing IAM/S3/EC2 with calls a least-privilege
+ *   key must fail).
+ *
  * fetch          {async ({ secrets, config }) => metric[]}
  *   Pull current metrics from the provider.
  *

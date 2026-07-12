@@ -34,7 +34,8 @@ const connector = {
   secretAccounts: ['apiKey', 'apiSecret'],
   hosts:          HOSTS,
   fields: [
-    { name: 'apiKey',    label: 'API key',    kind: 'secret', required: true },
+    { name: 'apiKey',    label: 'API key',    kind: 'secret', required: true,
+      help: 'Cloudinary keys are account-wide — no narrower scope exists; use a key dedicated to Levee.' },
     { name: 'apiSecret', label: 'API secret', kind: 'secret', required: true },
     { name: 'cloudName', label: 'Cloud name', kind: 'config', required: true, placeholder: 'my-cloud' },
   ],

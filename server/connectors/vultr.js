@@ -33,6 +33,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
+      help: 'Vultr API keys are account-wide — no narrower scope exists; restrict the key to your IP if possible.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

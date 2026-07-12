@@ -34,6 +34,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
+      help: 'DeepSeek keys are account-wide — no narrower scope exists; use a key dedicated to Levee.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

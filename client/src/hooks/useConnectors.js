@@ -48,6 +48,17 @@ export function useSyncConnector() {
   })
 }
 
+export function useAuditConnector() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (serviceId) =>
+      apiFetch(`/api/connectors/${serviceId}/audit`, { method: 'POST' }),
+    onSuccess: (_, serviceId) => {
+      qc.invalidateQueries({ queryKey: ['metrics', serviceId] })
+    },
+  })
+}
+
 export function useDeleteConnector() {
   const qc = useQueryClient()
   return useMutation({

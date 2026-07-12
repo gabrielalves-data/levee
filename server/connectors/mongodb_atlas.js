@@ -74,7 +74,8 @@ const connector = {
   secretAccounts: ['publicKey', 'privateKey'],
   hosts:          HOSTS,
   fields: [
-    { name: 'publicKey',  label: 'Public key',  kind: 'secret', required: true },
+    { name: 'publicKey',  label: 'Public key',  kind: 'secret', required: true,
+      help: 'Org API key with only the Organization Billing Viewer role.' },
     { name: 'privateKey', label: 'Private key', kind: 'secret', required: true },
     { name: 'orgId',      label: 'Organization ID', kind: 'config', required: true },
   ],

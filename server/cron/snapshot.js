@@ -4,6 +4,16 @@ const cron = require('node-cron');
 const db = require('../db/database');
 const { startAlertCron } = require('./refreshAlerts');
 const { syncService } = require('../connectors/sync');
+const { get: getConnector } = require('../connectors/registry');
+
+const DEFAULT_SYNC_INTERVAL_HOURS = 6;
+
+// Pure — true if a connector last synced more than intervalHours ago (or never).
+function isDueForSync(lastSyncAt, intervalHours, now = new Date()) {
+  if (!lastSyncAt) return true;
+  const elapsedHours = (now.getTime() - new Date(lastSyncAt).getTime()) / 3_600_000;
+  return elapsedHours >= intervalHours;
+}
 
 function takeSnapshot(year, month) {
   const rows = db.prepare(`
@@ -39,17 +49,19 @@ async function syncEnabledConnectors() {
 
   const rows = db.prepare(`
     WITH enabled_api AS (
-      SELECT sc.service_id
+      SELECT sc.service_id, sc.provider_key, s.last_sync_at
       FROM   service_connectors sc
       JOIN   services s ON s.id = sc.service_id
       WHERE  sc.enabled = 1
         AND  s.connector_type = 'api'
         AND  s.active = 1
     )
-    SELECT service_id FROM enabled_api
+    SELECT service_id, provider_key, last_sync_at FROM enabled_api
   `).all();
 
-  for (const { service_id } of rows) {
+  for (const { service_id, provider_key, last_sync_at } of rows) {
+    const intervalHours = getConnector(provider_key)?.syncIntervalHours ?? DEFAULT_SYNC_INTERVAL_HOURS;
+    if (!isDueForSync(last_sync_at, intervalHours)) continue;
     await syncService(service_id);
   }
 }
@@ -98,4 +110,4 @@ function startCrons() {
   catchUpMissedSnapshot();
 }
 
-module.exports = { startCrons, takeSnapshot, syncEnabledConnectors };
+module.exports = { startCrons, takeSnapshot, syncEnabledConnectors, isDueForSync };

@@ -37,6 +37,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
+      help: 'OpenRouter keys are account-wide — set a credit limit on the key and use one dedicated to Levee.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

@@ -82,4 +82,4 @@ async function syncService(serviceId) {
   }
 }
 
-module.exports = { syncService };
+module.exports = { syncService, upsertMetrics: runUpsertMetrics };

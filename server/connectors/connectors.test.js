@@ -29,6 +29,11 @@ const {
 } = require('./aws_cost');
 
 const {
+  auditAwsKey,
+  _setFetchForTest: awsAuditSetFetch,
+} = require('./aws_audit');
+
+const {
   mapBillingResponse: copilotMapBilling,
   _setFetchForTest: copilotSetFetch,
   connector: copilotConnector,
@@ -177,6 +182,7 @@ before(() => {
   anthropicSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
   openaiSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
   awsSetFetch(async      () => { throw new Error('[test] no real HTTP allowed'); });
+  awsAuditSetFetch(async () => { throw new Error('[test] no real HTTP allowed'); });
   copilotSetFetch(async  () => { throw new Error('[test] no real HTTP allowed'); });
   vercelSetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
   sentrySetFetch(async   () => { throw new Error('[test] no real HTTP allowed'); });
@@ -511,6 +517,44 @@ describe('aws_cost — connector.fetch (mocked HTTP)', () => {
         return true;
       }
     );
+  });
+
+  it('is wired to the connector as the optional audit hook', () => {
+    assert.equal(awsConnector.audit, auditAwsKey);
+  });
+
+  it('defaults to a 24-hour sync interval (Cost Explorer bills per request)', () => {
+    assert.equal(awsConnector.syncIntervalHours, 24);
+  });
+});
+
+describe('aws_audit — auditAwsKey (sentinel probing)', () => {
+  const secrets = { accessKeyId: 'AKIA', secretAccessKey: 'xsecret' };
+
+  it('reports no over-privilege when every probe is denied', async () => {
+    awsAuditSetFetch(async () => ({ ok: false, status: 403, statusText: 'Forbidden' }));
+    const metrics = await auditAwsKey({ secrets });
+    assert.equal(metrics.length, 1);
+    assert.equal(metrics[0].metric_key, 'key_privilege_audit');
+    assert.equal(metrics[0].value_type, 'text');
+    assert.equal(metrics[0].value_text, 'no over-privilege detected across IAM/S3/EC2');
+  });
+
+  it('flags over-privilege when a probe unexpectedly succeeds', async () => {
+    awsAuditSetFetch(async (url) => ({
+      ok: url.includes('s3.amazonaws.com'),
+      status: url.includes('s3.amazonaws.com') ? 200 : 403,
+      statusText: 'OK',
+    }));
+    const metrics = await auditAwsKey({ secrets });
+    assert.match(metrics[0].value_text, /^⚠ over-privileged:/);
+    assert.match(metrics[0].value_text, /s3:ListBuckets/);
+  });
+
+  it('never leaks the secret access key into the audit result', async () => {
+    awsAuditSetFetch(async () => ({ ok: true, status: 200, statusText: 'OK' }));
+    const metrics = await auditAwsKey({ secrets });
+    assert.doesNotMatch(metrics[0].value_text, /xsecret/);
   });
 });
 

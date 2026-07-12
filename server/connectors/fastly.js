@@ -30,6 +30,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'API token', kind: 'secret', required: true,
+      help: 'Create the token for a user with only the Billing role — read-only invoice access, no service config access.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

@@ -46,6 +46,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'API token', kind: 'secret', required: true,
+      help: 'Railway tokens are account-wide — no narrower billing-only scope exists; use a token dedicated to Levee.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

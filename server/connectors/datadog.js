@@ -42,7 +42,8 @@ const connector = {
   secretAccounts: ['apiKey', 'appKey'],
   hosts:          HOSTS,
   fields: [
-    { name: 'apiKey', label: 'API key',         kind: 'secret', required: true },
+    { name: 'apiKey', label: 'API key',         kind: 'secret', required: true,
+      help: 'API keys have no scoping — use a key dedicated to Levee so it can be revoked independently.' },
     { name: 'appKey', label: 'Application key', kind: 'secret', required: true, help: 'Needs the usage_read permission.' },
     { name: 'site',   label: 'Datadog site',    kind: 'config', type: 'select', options: SITES, required: false },
   ],

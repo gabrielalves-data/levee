@@ -56,7 +56,8 @@ const connector = {
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
   fields: [
-    { name: 'apiKey', label: 'Auth token',        kind: 'secret', required: true },
+    { name: 'apiKey', label: 'Auth token',        kind: 'secret', required: true,
+      help: 'Scope the token to org:read (add org:billing if your plan exposes it) — nothing else is needed.' },
     { name: 'org',    label: 'Organization slug', kind: 'config', required: true, placeholder: 'my-org-slug' },
   ],
 

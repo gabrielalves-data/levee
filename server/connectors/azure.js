@@ -46,7 +46,8 @@ const connector = {
     { name: 'tenantId',       label: 'Tenant ID',       kind: 'config', required: true },
     { name: 'clientId',       label: 'Client ID',       kind: 'config', required: true },
     { name: 'subscriptionId', label: 'Subscription ID', kind: 'config', required: true },
-    { name: 'clientSecret',   label: 'Client secret',   kind: 'secret', required: true },
+    { name: 'clientSecret',   label: 'Client secret',   kind: 'secret', required: true,
+      help: 'Service principal with only the Cost Management Reader role, scoped to this one subscription.' },
   ],
 
   async fetch({ secrets, config }) {

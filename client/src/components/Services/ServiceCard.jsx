@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMetrics, useUpsertMetric } from '../../hooks/useMetrics'
 import { useSnapshots } from '../../hooks/useSnapshots'
 import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
-import { useAllowOutbound, useUpsertConnector, useSyncConnector, useDeleteConnector } from '../../hooks/useConnectors'
+import { useAllowOutbound, useUpsertConnector, useSyncConnector, useAuditConnector, useDeleteConnector } from '../../hooks/useConnectors'
 import { useProviders } from '../../hooks/useProviders'
 
 const CATEGORY_STYLES = {
@@ -284,6 +284,7 @@ function FormField({ field, value, onChange }) {
 function ApiPanel({ service, apiKey, authType, fields }) {
   const upsert = useUpsertConnector()
   const sync = useSyncConnector()
+  const audit = useAuditConnector()
   const disconnect = useDeleteConnector()
   const { allowed } = useAllowOutbound()
   const [values, setValues] = useState({})
@@ -330,6 +331,15 @@ function ApiPanel({ service, apiKey, authType, fields }) {
       await sync.mutateAsync(service.id)
     } catch {
       setError('Sync failed')
+    }
+  }
+
+  async function handleAudit() {
+    setError('')
+    try {
+      await audit.mutateAsync(service.id)
+    } catch {
+      setError('Audit failed')
     }
   }
 
@@ -413,6 +423,17 @@ function ApiPanel({ service, apiKey, authType, fields }) {
             <Icons.RefreshCw size={11} className={sync.isPending ? 'animate-spin' : ''} />
             {sync.isPending ? 'Syncing…' : 'Sync now'}
           </button>
+          {providerKey === 'aws_cost' && (
+            <button
+              onClick={handleAudit}
+              disabled={!allowed || audit.isPending}
+              title={!allowed ? 'Enable outbound connections in Settings to audit' : 'Probe IAM/S3/EC2 for over-privilege (opt-in, read-only)'}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white rounded-lg transition-colors"
+            >
+              <Icons.ShieldCheck size={11} className={audit.isPending ? 'animate-pulse' : ''} />
+              {audit.isPending ? 'Auditing…' : 'Audit key permissions'}
+            </button>
+          )}
           <button
             onClick={handleDisconnect}
             disabled={disconnect.isPending}
@@ -550,11 +571,17 @@ export default function ServiceCard({ service, focused = false }) {
   const categoryStyle = CATEGORY_STYLES[service.category] ?? CATEGORY_STYLES.custom
   const categoryLabel = CATEGORY_LABELS[service.category] ?? service.category
 
+  // Flags the card when the opt-in AWS key-privilege audit (ServiceCard's
+  // ApiPanel → "Audit key permissions") found the connected credential can
+  // reach more than Levee asked for.
+  const auditFlagged = !!metrics.find(m => m.metric_key === 'key_privilege_audit')?.value_text?.startsWith('⚠')
+
   return (
     <div
       ref={cardRef}
       className={`bg-slate-800 rounded-xl p-4 border flex flex-col gap-3 transition-colors ${
-        focused ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-slate-700'
+        auditFlagged ? 'border-red-500/70 ring-2 ring-red-500/30'
+          : focused ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-slate-700'
       }`}
     >
       <div className="flex items-start justify-between">

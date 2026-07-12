@@ -38,7 +38,8 @@ const connector = {
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
   fields: [
-    { name: 'apiKey', label: 'Access token', kind: 'secret', required: true },
+    { name: 'apiKey', label: 'Access token', kind: 'secret', required: true,
+      help: 'Vercel tokens are account-wide — no narrower billing-only scope exists; use a token dedicated to Levee.' },
     { name: 'teamId', label: 'Team ID',      kind: 'config', required: false, placeholder: 'team_xxx (omit for personal)' },
   ],
 

@@ -41,6 +41,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'Personal API key', kind: 'secret', required: true,
+      help: 'Linear personal API keys are full-account scope — no narrower read-only option; use a key dedicated to Levee.' },
+  ],
 
   async fetch({ secrets }) {
     const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {

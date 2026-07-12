@@ -32,7 +32,8 @@ const connector = {
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
   fields: [
-    { name: 'apiKey', label: 'Service token', kind: 'secret', required: true, placeholder: 'tokenId:tokenSecret' },
+    { name: 'apiKey', label: 'Service token', kind: 'secret', required: true, placeholder: 'tokenId:tokenSecret',
+      help: 'Create a service token scoped to organization-level read access only — no database resources.' },
     { name: 'org',    label: 'Organization',  kind: 'config', required: true },
   ],
 

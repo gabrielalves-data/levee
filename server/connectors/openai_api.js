@@ -77,6 +77,10 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  fields: [
+    { name: 'apiKey', label: 'Admin API key', kind: 'secret', required: true,
+      help: 'Admin key restricted to read-only usage + costs scopes — not a project key.' },
+  ],
 
   async fetch({ secrets }) {
     const { start_time, end_time } = monthBounds();
