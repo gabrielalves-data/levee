@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Trash2, ToggleLeft, ToggleRight, Download, Upload, Lock, Unlock, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, ToggleLeft, ToggleRight, Download, Upload, Lock, Unlock, RefreshCw, Search } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useServices, useCreateService, usePatchService, useArchiveService } from '../hooks/useServices'
 import { apiFetch } from '../api'
@@ -13,6 +13,14 @@ const CATEGORIES = [
   { value: 'tool',     label: 'Dev Tool' },
   { value: 'custom',   label: 'Custom' },
 ]
+
+const CATEGORY_LABELS = {
+  cloud:    'Cloud',
+  ai_model: 'AI Models',
+  ai_api:   'AI APIs',
+  tool:     'Dev Tools',
+  custom:   'Custom',
+}
 
 const COST_MODELS = [
   { value: 'flat',   label: 'Flat rate' },
@@ -514,7 +522,15 @@ function UpdatesSection() {
 
 export default function Settings() {
   const [showForm, setShowForm] = useState(false)
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const { data: services = [], isLoading } = useServices({ all: true })
+
+  const categories = [...new Set(services.map(s => s.category))]
+  const q = search.trim().toLowerCase()
+  const visibleServices = services
+    .filter(s => categoryFilter === 'all' || s.category === categoryFilter)
+    .filter(s => !q || s.name.toLowerCase().includes(q) || s.provider.toLowerCase().includes(q))
 
   return (
     <div className="p-6 space-y-6">
@@ -542,11 +558,42 @@ export default function Settings() {
           </div>
         )}
 
+        {!isLoading && services.length > 0 && (
+          <div className="space-y-2">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search services…"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {['all', ...categories].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    categoryFilter === cat
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                  }`}
+                >
+                  {cat === 'all' ? 'All' : (CATEGORY_LABELS[cat] ?? cat)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <p className="text-xs text-slate-500">Loading…</p>
+        ) : visibleServices.length === 0 ? (
+          <p className="text-xs text-slate-500">No services match.</p>
         ) : (
           <div className="space-y-1.5">
-            {services.map(s => <ServiceRow key={s.id} service={s} />)}
+            {visibleServices.map(s => <ServiceRow key={s.id} service={s} />)}
           </div>
         )}
       </section>
