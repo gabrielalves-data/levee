@@ -172,6 +172,9 @@ const connector = {
   authType:       'localOAuth',
   secretAccounts: [],            // no keychain entries owned by Levee
   hosts:          HOSTS,
+  // The 5-hour session window makes the default 6h poll useless — it could
+  // miss an entire window. Poll every 30 min instead for a near-live reading.
+  syncIntervalHours: 0.5,
 
   async fetch({ config } = {}) {
     // Consent is also checked in the PUT /api/connectors route when the

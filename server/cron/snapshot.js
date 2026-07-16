@@ -87,7 +87,7 @@ function catchUpMissedSnapshot() {
 function startCrons() {
   // Snapshot the closing month at 23:50 on its last possible day (28-31),
   // firing only when tomorrow rolls over to the 1st. A "snapshot on the 1st
-  // at 00:00" job would land on the same minute as the 6-hour sync cron below
+  // at 00:00" job would land on the same minute as the sync cron below
   // and race it: depending on ordering, the snapshot would record either a
   // stale value or the new month's near-zero MTD instead of the month that
   // just closed.
@@ -99,8 +99,11 @@ function startCrons() {
     takeSnapshot(now.getFullYear(), now.getMonth() + 1);
   });
 
-  // Sync enabled API connectors every 6 hours (only when allow_outbound=true)
-  cron.schedule('0 */6 * * *', () => {
+  // Check enabled API connectors every 30 min (only when allow_outbound=true).
+  // This is just the check cadence — each connector only actually syncs once
+  // its own syncIntervalHours has elapsed (default 6h; claude_plan overrides
+  // to 0.5h since its usage window resets every 5h).
+  cron.schedule('*/30 * * * *', () => {
     syncEnabledConnectors().catch(err => {
       console.error('[levee] connector sync error:', err.message);
     });
