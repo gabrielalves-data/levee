@@ -80,6 +80,14 @@ router.delete('/:serviceId', async (req, res) => {
     'UPDATE service_connectors SET enabled = 0 WHERE service_id = ?'
   ).run(serviceId);
 
+  // Revert to manual so the card stops offering Sync/Disconnect for a
+  // connector that no longer has credentials, and clear stale sync state.
+  db.prepare(`
+    UPDATE services
+    SET    connector_type = 'manual', last_sync_at = NULL, sync_status = NULL, sync_error = NULL
+    WHERE  id = ?
+  `).run(serviceId);
+
   if (row) {
     const connector = getConnector(row.provider_key);
     const accounts = connector?.secretAccounts ?? ['apiKey'];
