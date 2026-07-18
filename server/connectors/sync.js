@@ -26,6 +26,14 @@ const updateSyncResult = db.prepare(`
   WHERE  id = ?
 `);
 
+const resetFailures = db.prepare(`
+  UPDATE service_connectors SET consecutive_failures = 0 WHERE service_id = ?
+`);
+
+const incrementFailures = db.prepare(`
+  UPDATE service_connectors SET consecutive_failures = consecutive_failures + 1 WHERE service_id = ?
+`);
+
 const runUpsertMetrics = db.transaction((serviceId, metrics) => {
   for (const m of metrics) {
     upsertMetric.run(
@@ -34,6 +42,28 @@ const runUpsertMetrics = db.transaction((serviceId, metrics) => {
     );
   }
 });
+
+// Shared by syncService and the test-connection route (§6.5) — resolves every
+// account a connector declares in secretAccounts, throwing a clean "missing
+// credential" error (H3) unless the connector opts into resolveSecrets to
+// fill a gap from a legacy keychain layout (e.g. twilio.js's apiKey back-compat).
+async function resolveConnectorSecrets(serviceId, connector, config) {
+  const secrets = {};
+  const missing = [];
+  for (const account of connector.secretAccounts ?? []) {
+    const value = await getSecret(`connector:${serviceId}:${account}`);
+    if (value == null) { missing.push(account); continue; }
+    secrets[account] = value;
+  }
+  if (missing.length > 0) {
+    if (typeof connector.resolveSecrets === 'function') {
+      await connector.resolveSecrets({ serviceId, secrets, missing, config, getSecret });
+    } else {
+      throw new Error(`Missing credential "${missing[0]}" — open the service card and reconnect.`);
+    }
+  }
+  return secrets;
+}
 
 async function syncService(serviceId) {
   const row = db.prepare(`
@@ -57,29 +87,25 @@ async function syncService(serviceId) {
     const msg = `Unknown provider: ${row.provider_key}`;
     const now = new Date().toISOString();
     updateSyncResult.run(now, 'error', msg, serviceId);
+    incrementFailures.run(serviceId);
     return { sync_status: 'error', sync_error: msg, last_sync_at: now };
   }
 
   const now = new Date().toISOString();
   try {
-    const secrets = {};
-    for (const account of connector.secretAccounts ?? []) {
-      const value = await getSecret(`connector:${serviceId}:${account}`);
-      if (value == null) {
-        throw new Error(`Missing credential "${account}" — open the service card and reconnect.`);
-      }
-      secrets[account] = value;
-    }
     const config = row.config ? JSON.parse(row.config) : {};
+    const secrets = await resolveConnectorSecrets(serviceId, connector, config);
     const metrics = await connector.fetch({ secrets, config });
     runUpsertMetrics(serviceId, metrics);
     updateSyncResult.run(now, 'ok', null, serviceId);
+    resetFailures.run(serviceId);
     return { sync_status: 'ok', sync_error: null, last_sync_at: now };
   } catch (err) {
     const msg = err.message ?? String(err);
     updateSyncResult.run(now, 'error', msg, serviceId);
+    incrementFailures.run(serviceId);
     return { sync_status: 'error', sync_error: msg, last_sync_at: now };
   }
 }
 
-module.exports = { syncService, upsertMetrics: runUpsertMetrics };
+module.exports = { syncService, upsertMetrics: runUpsertMetrics, resolveConnectorSecrets };

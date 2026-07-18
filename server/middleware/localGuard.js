@@ -2,9 +2,13 @@
 
 const crypto = require('crypto');
 
-// Per-launch token — generated once at module load, never persisted.
-// Electron main can pre-set LEVEE_TOKEN so it knows the value before spawning.
-const LAUNCH_TOKEN = process.env.LEVEE_TOKEN || crypto.randomBytes(32).toString('hex');
+// Per-launch token — never persisted. Packaged builds receive the real value
+// over parentPort (see setLaunchToken, called from index.js before the server
+// starts accepting connections) so it never sits in the child process's env
+// (readable via /proc/<pid>/environ on Linux). This placeholder is only live
+// for dev (`node server/index.js` with no Electron parent) or the brief
+// window before the parentPort message arrives.
+let LAUNCH_TOKEN = process.env.LEVEE_TOKEN || crypto.randomBytes(32).toString('hex');
 
 const LOOPBACK      = new Set(['127.0.0.1', 'localhost']);
 // Allowed origins: loopback-only, any port (covers Vite :5173 in dev and file:// in Electron)
@@ -37,11 +41,18 @@ function localGuard(req, res, next) {
 // Constant-time comparison over fixed-length digests so a request's validity
 // can't be inferred from response timing. Hashing first sidesteps the
 // equal-length requirement of timingSafeEqual.
-const TOKEN_DIGEST = crypto.createHash('sha256').update(LAUNCH_TOKEN).digest();
+let TOKEN_DIGEST = crypto.createHash('sha256').update(LAUNCH_TOKEN).digest();
 function tokenMatches(provided) {
   if (typeof provided !== 'string') return false;
   const providedDigest = crypto.createHash('sha256').update(provided).digest();
   return crypto.timingSafeEqual(TOKEN_DIGEST, providedDigest);
 }
 
-module.exports = { localGuard, LAUNCH_TOKEN };
+// Called once from index.js after receiving the real token over parentPort,
+// before the server starts accepting connections.
+function setLaunchToken(token) {
+  LAUNCH_TOKEN = token;
+  TOKEN_DIGEST = crypto.createHash('sha256').update(LAUNCH_TOKEN).digest();
+}
+
+module.exports = { localGuard, LAUNCH_TOKEN, setLaunchToken };

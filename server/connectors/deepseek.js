@@ -15,6 +15,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.deepseek.com'];
 const ENDPOINT = 'https://api.deepseek.com/user/balance';
+const ENDPOINTS = [{ method: 'GET', path: /^\/user\/balance$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -34,13 +35,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
       help: 'DeepSeek keys are account-wide — no narrower scope exists; use a key dedicated to Levee.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'Authorization': `Bearer ${secrets.apiKey}`,
         'Accept':        'application/json',

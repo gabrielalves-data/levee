@@ -54,6 +54,19 @@
  *   needs to contact.
  *   e.g. ['api.openai.com'] or ['ce.us-east-1.amazonaws.com']
  *
+ * endpoints      {{ method: string, path: RegExp }[]}  (optional)
+ *   Exact-call allowlist, layered on top of `hosts`. A host allowlist alone
+ *   lets a buggy mapper (or a compromised dependency) call ANY endpoint on an
+ *   allowlisted host with this connector's — sometimes org-powerful — key.
+ *   When present, http.js additionally requires every request's (method,
+ *   url.pathname) to match one declared entry, or it throws before the
+ *   request is issued. One entry per distinct request fetch()/audit()/
+ *   testConnection() makes; template-interpolated path segments (an account
+ *   SID, an org id) are part of the regex, not literal strings.
+ *   e.g. [{ method: 'POST', path: /^\/$/ }] for a POST-to-root JSON API.
+ *   Connectors without `endpoints` fall back to host-only enforcement —
+ *   every connector in this registry declares them (a test enforces this).
+ *
  * syncIntervalHours {number}  (optional; default 6)
  *   How often syncEnabledConnectors() (server/cron/snapshot.js) actually calls
  *   fetch() for this connector, independent of the cron's own 6-hour tick.
@@ -118,11 +131,13 @@ function get(key) {
 
 /**
  * All registered connectors as a serialisable array (fetch fn excluded).
- * Safe to send to the frontend.
+ * Safe to send to the frontend. `endpoints` holds RegExp objects that
+ * JSON.stringify would flatten to useless `{}` — server-internal only,
+ * dropped here the same way `fetch` is.
  * @returns {object[]}
  */
 function list() {
-  return [...registry.values()].map(({ fetch: _f, ...meta }) => meta);
+  return [...registry.values()].map(({ fetch: _f, endpoints: _e, ...meta }) => meta);
 }
 
 module.exports = { registry, register, get, list };

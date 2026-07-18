@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const db = require('../db/database');
+const { isValidSlotIndex, serviceExists } = require('../middleware/validate');
 
 const router = Router();
 
@@ -38,14 +39,13 @@ router.get('/', (req, res) => {
 // PUT /api/widget/:slotIndex — assign or update a slot
 router.put('/:slotIndex', (req, res) => {
   const slotIndex = Number(req.params.slotIndex);
-  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 3) {
+  if (!isValidSlotIndex(slotIndex)) {
     return res.status(400).json({ error: 'slotIndex must be an integer between 0 and 3' });
   }
 
   const { service_id, metric_key, label_override } = req.body;
-  if (service_id != null) {
-    const svc = db.prepare('SELECT id FROM services WHERE id = ?').get(service_id);
-    if (!svc) return res.status(400).json({ error: `Unknown service_id: ${service_id}` });
+  if (service_id != null && !serviceExists(service_id)) {
+    return res.status(400).json({ error: `Unknown service_id: ${service_id}` });
   }
 
   db.prepare(`
@@ -63,7 +63,7 @@ router.put('/:slotIndex', (req, res) => {
 // DELETE /api/widget/:slotIndex — clear a slot (nulls service/metric, keeps the row)
 router.delete('/:slotIndex', (req, res) => {
   const slotIndex = Number(req.params.slotIndex);
-  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 3) {
+  if (!isValidSlotIndex(slotIndex)) {
     return res.status(400).json({ error: 'slotIndex must be an integer between 0 and 3' });
   }
   db.prepare(`

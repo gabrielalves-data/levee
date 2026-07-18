@@ -48,6 +48,13 @@ export function useSyncConnector() {
   })
 }
 
+export function useTestConnector() {
+  return useMutation({
+    mutationFn: (serviceId) =>
+      apiFetch(`/api/connectors/${serviceId}/test`, { method: 'POST' }),
+  })
+}
+
 export function useAuditConnector() {
   const qc = useQueryClient()
   return useMutation({

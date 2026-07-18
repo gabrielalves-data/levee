@@ -14,6 +14,7 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['api.cloudinary.com'];
+const ENDPOINTS = [{ method: 'GET', path: /^\/v1_1\/[^/]+\/usage$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -33,6 +34,7 @@ const connector = {
   authType:       'basicAuth',
   secretAccounts: ['apiKey', 'apiSecret'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey',    label: 'API key',    kind: 'secret', required: true,
       help: 'Cloudinary keys are account-wide — no narrower scope exists; use a key dedicated to Levee.' },
@@ -47,7 +49,7 @@ const connector = {
     const auth = Buffer.from(`${secrets.apiKey}:${secrets.apiSecret}`).toString('base64');
     const res = await _fetch(
       `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/usage`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       {
         headers: {
           'Authorization': `Basic ${auth}`,

@@ -13,6 +13,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.bunny.net'];
 const ENDPOINT = 'https://api.bunny.net/billing';
+const ENDPOINTS = [{ method: 'GET', path: /^\/billing$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -31,13 +32,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
       help: 'Bunny.net account API keys are account-wide — no narrower scope exists; use a key dedicated to Levee.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'AccessKey': secrets.apiKey,
         'Accept':    'application/json',

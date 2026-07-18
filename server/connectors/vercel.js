@@ -13,6 +13,7 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['api.vercel.com'];
+const ENDPOINTS = [{ method: 'GET', path: /^\/v2\/billing$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -37,6 +38,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Access token', kind: 'secret', required: true,
       help: 'Vercel tokens are account-wide — no narrower billing-only scope exists; use a token dedicated to Levee.' },
@@ -49,7 +51,7 @@ const connector = {
       ? `https://api.vercel.com/v2/billing?teamId=${encodeURIComponent(teamId)}`
       : 'https://api.vercel.com/v2/billing';
 
-    const res = await _fetch(url, { hosts: HOSTS }, {
+    const res = await _fetch(url, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: { 'Authorization': `Bearer ${secrets.apiKey}` },
     });
     if (!res.ok) {

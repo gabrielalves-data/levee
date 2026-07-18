@@ -14,6 +14,7 @@ const { register } = require('./registry');
 const HOSTS = ['api.anthropic.com'];
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA = 'oauth-2025-04-20';
+const ENDPOINTS = [{ method: 'GET', path: /^\/api\/oauth\/usage$/ }];
 
 // Reads Claude Code's locally stored OAuth credentials and returns ONLY the
 // access token. The refresh token is never read. The token and raw file
@@ -172,6 +173,7 @@ const connector = {
   authType:       'localOAuth',
   secretAccounts: [],            // no keychain entries owned by Levee
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   // The 5-hour session window makes the default 6h poll useless — it could
   // miss an entire window. Poll every 30 min instead for a near-live reading.
   syncIntervalHours: 0.5,
@@ -184,7 +186,7 @@ const connector = {
       throw new Error('Local-token consent not granted for this service.');
     }
     const token = await _readToken();
-    const res = await _fetch(USAGE_URL, { hosts: HOSTS }, {
+    const res = await _fetch(USAGE_URL, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         Authorization:     `Bearer ${token}`,
         'anthropic-beta':  OAUTH_BETA,

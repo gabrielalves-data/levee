@@ -10,6 +10,10 @@ const { register } = require('./registry');
 
 const ANTHROPIC_VERSION = '2023-06-01';
 const HOSTS = ['api.anthropic.com'];
+const ENDPOINTS = [
+  { method: 'GET', path: /^\/v1\/organizations\/cost_report$/ },
+  { method: 'GET', path: /^\/v1\/organizations\/usage_report\/messages$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -33,7 +37,7 @@ async function fetchAllPages(baseUrl, params, headers) {
   do {
     const qp = new URLSearchParams(params);
     if (nextPage) qp.set('page', nextPage);
-    const res = await _fetch(`${baseUrl}?${qp}`, { hosts: HOSTS }, { headers });
+    const res = await _fetch(`${baseUrl}?${qp}`, { hosts: HOSTS, endpoints: ENDPOINTS }, { headers });
     if (!res.ok) {
       throw new Error(`Anthropic API returned ${res.status}: ${res.statusText}`);
     }
@@ -78,6 +82,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Admin API key', kind: 'secret', required: true,
       help: 'Admin API keys are org-powerful (no read-only scope exists yet) — Levee only calls the cost/usage report endpoints, never anything else.' },

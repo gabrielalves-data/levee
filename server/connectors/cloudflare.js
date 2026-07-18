@@ -14,6 +14,10 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['api.cloudflare.com'];
+const ENDPOINTS = [
+  { method: 'POST', path: /^\/client\/v4\/graphql$/ },
+  { method: 'GET',  path: /^\/client\/v4\/accounts\/[^/]+\/billing\/history$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -63,6 +67,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey',    label: 'API token', kind: 'secret', required: true,
       help: 'Scope the token to Account → Billing: Read (add Zone → Analytics: Read if using request analytics).' },
@@ -106,7 +111,7 @@ const connector = {
         variables: { zoneTag: zoneId, since, until },
       };
       fetches.push(
-        _fetch('https://api.cloudflare.com/client/v4/graphql', { hosts: HOSTS }, {
+        _fetch('https://api.cloudflare.com/client/v4/graphql', { hosts: HOSTS, endpoints: ENDPOINTS }, {
           method: 'POST',
           headers,
           body:   JSON.stringify(query),
@@ -121,7 +126,7 @@ const connector = {
       fetches.push(
         _fetch(
           `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/billing/history`,
-          { hosts: HOSTS },
+          { hosts: HOSTS, endpoints: ENDPOINTS },
           { headers }
         ).catch(() => null) // billing scope optional
       );

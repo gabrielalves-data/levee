@@ -16,6 +16,9 @@ const { register } = require('./registry');
 
 const HOSTS  = ['cloud.mongodb.com'];
 const ACCEPT = 'application/vnd.atlas.2023-11-15+json';
+// {orgId} is interpolated — same path is hit twice (unauth challenge, then
+// the authenticated retry with the Digest header).
+const ENDPOINTS = [{ method: 'GET', path: /^\/api\/atlas\/v2\/orgs\/[^/]+\/invoices\/pending$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -73,6 +76,7 @@ const connector = {
   authType:       'digest',
   secretAccounts: ['publicKey', 'privateKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'publicKey',  label: 'Public key',  kind: 'secret', required: true,
       help: 'Org API key with only the Organization Billing Viewer role.' },
@@ -89,7 +93,7 @@ const connector = {
     const headers = { 'Accept': ACCEPT };
 
     // 1. Unauthenticated request to obtain the Digest challenge.
-    const challengeRes = await _fetch(url, { hosts: HOSTS }, { headers });
+    const challengeRes = await _fetch(url, { hosts: HOSTS, endpoints: ENDPOINTS }, { headers });
     if (challengeRes.status !== 401) {
       if (!challengeRes.ok) {
         throw new Error(`MongoDB Atlas returned ${challengeRes.status}: ${challengeRes.statusText}`);
@@ -108,7 +112,7 @@ const connector = {
     });
 
     // 2. Authenticated retry.
-    const res = await _fetch(url, { hosts: HOSTS }, {
+    const res = await _fetch(url, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: { ...headers, 'Authorization': authHeader },
     });
     if (!res.ok) {

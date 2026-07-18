@@ -13,6 +13,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.vultr.com'];
 const ENDPOINT = 'https://api.vultr.com/v2/account';
+const ENDPOINTS = [{ method: 'GET', path: /^\/v2\/account$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -33,13 +34,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
       help: 'Vultr API keys are account-wide — no narrower scope exists; restrict the key to your IP if possible.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'Authorization': `Bearer ${secrets.apiKey}`,
         'Accept':        'application/json',

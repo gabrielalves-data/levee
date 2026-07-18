@@ -13,6 +13,7 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['api.planetscale.com'];
+const ENDPOINTS = [{ method: 'GET', path: /^\/v1\/organizations\/[^/]+\/billing\/current_period$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -31,6 +32,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Service token', kind: 'secret', required: true, placeholder: 'tokenId:tokenSecret',
       help: 'Create a service token scoped to organization-level read access only — no database resources.' },
@@ -43,7 +45,7 @@ const connector = {
 
     const res = await _fetch(
       `https://api.planetscale.com/v1/organizations/${encodeURIComponent(org)}/billing/current_period`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       {
         headers: {
           'Authorization': secrets.apiKey, // format: "{tokenId}:{tokenSecret}"

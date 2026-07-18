@@ -15,6 +15,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['backboard.railway.app'];
 const ENDPOINT = 'https://backboard.railway.app/graphql/v2';
+const ENDPOINTS = [{ method: 'POST', path: /^\/graphql\/v2$/ }];
 
 const QUERY = `{
   me {
@@ -46,13 +47,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API token', kind: 'secret', required: true,
       help: 'Railway tokens are account-wide — no narrower billing-only scope exists; use a token dedicated to Levee.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       method:  'POST',
       headers: {
         'Authorization': `Bearer ${secrets.apiKey}`,

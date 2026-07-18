@@ -37,7 +37,7 @@ async function connectorFetch(url, connector, options = {}) {
   }
 
   // Gate 2: target host must be in this connector's allowlist.
-  const { hostname } = new URL(url);
+  const { hostname, pathname } = new URL(url);
   if (!Array.isArray(connector.hosts) || !connector.hosts.includes(hostname)) {
     throw new Error(
       `Host "${hostname}" is not in this connector's allowlist. ` +
@@ -46,6 +46,22 @@ async function connectorFetch(url, connector, options = {}) {
   }
 
   const { method = 'GET', headers = {}, body, timeoutMs = TIMEOUT_MS } = options;
+
+  // Gate 3: an allowlisted host doesn't mean every path on it is fair game —
+  // require the exact (method, path) to be one this connector declared, when
+  // it declares any. Closes the gap where a buggy mapper (or a compromised
+  // dependency) could call an unintended endpoint on an allowlisted host
+  // using this connector's — sometimes org-powerful — key.
+  if (Array.isArray(connector.endpoints)) {
+    const allowed = connector.endpoints.some(
+      (e) => e.method === method && e.path.test(pathname)
+    );
+    if (!allowed) {
+      throw new Error(
+        `"${method} ${pathname}" is not a declared endpoint for this connector.`
+      );
+    }
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

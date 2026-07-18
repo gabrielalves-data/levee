@@ -15,6 +15,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.elevenlabs.io'];
 const ENDPOINT = 'https://api.elevenlabs.io/v1/user/subscription';
+const ENDPOINTS = [{ method: 'GET', path: /^\/v1\/user\/subscription$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -34,13 +35,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
       help: 'If your plan supports key permissions, restrict this key to read-only access.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'xi-api-key': secrets.apiKey,
         'Accept':     'application/json',

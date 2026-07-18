@@ -14,6 +14,7 @@ const { register } = require('./registry');
 const HOSTS      = ['api.github.com'];
 const GH_VERSION = '2022-11-28';
 const SEAT_PRICES = { business: 19, enterprise: 39 };
+const ENDPOINTS = [{ method: 'GET', path: /^\/orgs\/[^/]+\/copilot\/billing$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -32,6 +33,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'GitHub PAT',   kind: 'secret', required: true, help: 'Needs the manage_billing:copilot scope.' },
     { name: 'org',    label: 'Organization', kind: 'config', required: true, placeholder: 'my-github-org' },
@@ -45,7 +47,7 @@ const connector = {
 
     const res = await _fetch(
       `https://api.github.com/orgs/${encodeURIComponent(org)}/copilot/billing`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       {
         headers: {
           'Authorization':        `Bearer ${secrets.apiKey}`,

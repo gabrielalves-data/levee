@@ -16,6 +16,8 @@ const http = require('./http');
 const { signAwsRequest } = require('./aws_sigv4');
 
 const AUDIT_HOSTS = ['iam.amazonaws.com', 's3.amazonaws.com', 'ec2.us-east-1.amazonaws.com'];
+// Every probe hits the service root; iam/ec2 sign a POST, s3 a bare GET.
+const AUDIT_ENDPOINTS = [{ method: 'POST', path: /^\/$/ }, { method: 'GET', path: /^\/$/ }];
 
 const PROBES = [
   { label: 'iam:GetUser',          host: 'iam.amazonaws.com',           service: 'iam', region: 'us-east-1', method: 'POST', body: 'Action=GetUser&Version=2010-05-08' },
@@ -43,7 +45,7 @@ async function runProbes(secrets) {
       accessKeyId:     secrets.accessKeyId,
       secretAccessKey: secrets.secretAccessKey,
     });
-    const res = await _fetch(`https://${probe.host}/`, { hosts: AUDIT_HOSTS }, {
+    const res = await _fetch(`https://${probe.host}/`, { hosts: AUDIT_HOSTS, endpoints: AUDIT_ENDPOINTS }, {
       method:  probe.method,
       headers,
       body:    probe.body || undefined,
@@ -70,4 +72,4 @@ async function auditAwsKey({ secrets }) {
   ];
 }
 
-module.exports = { auditAwsKey, runProbes, PROBES, AUDIT_HOSTS, _setFetchForTest };
+module.exports = { auditAwsKey, runProbes, PROBES, AUDIT_HOSTS, AUDIT_ENDPOINTS, _setFetchForTest };

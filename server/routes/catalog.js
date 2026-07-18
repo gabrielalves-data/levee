@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const db = require('../db/database');
 const catalog = require('../catalog/plans.json');
+const { serviceExists } = require('../middleware/validate');
 
 const router = Router();
 
@@ -50,8 +51,7 @@ router.post('/apply', (req, res) => {
     return res.status(404).json({ error: 'Unknown providerKey or planKey' });
   }
 
-  const exists = db.prepare('SELECT id FROM services WHERE id = ?').get(serviceId);
-  if (!exists) return res.status(404).json({ error: 'Service not found' });
+  if (!serviceExists(serviceId)) return res.status(404).json({ error: 'Service not found' });
 
   applyPlan(serviceId, plan, planKey);
   res.json({ ok: true, serviceId, planKey, monthly_bill: plan.price });

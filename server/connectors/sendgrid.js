@@ -15,6 +15,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.sendgrid.com'];
 const ENDPOINT = 'https://api.sendgrid.com/v3/user/credits';
+const ENDPOINTS = [{ method: 'GET', path: /^\/v3\/user\/credits$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -33,13 +34,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API key', kind: 'secret', required: true,
       help: 'Create a Restricted Access API key with only the Billing → Read Access permission enabled.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'Authorization': `Bearer ${secrets.apiKey}`,
         'Accept':        'application/json',

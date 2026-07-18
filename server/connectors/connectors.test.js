@@ -528,6 +528,36 @@ describe('aws_cost — connector.fetch (mocked HTTP)', () => {
   });
 });
 
+describe('aws_cost — testConnection (§6.5, STS GetCallerIdentity)', () => {
+  it('resolves without throwing on a 2xx STS response', async () => {
+    let capturedUrl;
+    awsSetFetch(async (url) => { capturedUrl = url; return { ok: true, status: 200 }; });
+    await awsConnector.testConnection({
+      secrets: { accessKeyId: 'AKIA', secretAccessKey: 'secret' },
+    });
+    assert.equal(capturedUrl, 'https://sts.amazonaws.com/');
+  });
+
+  it('throws a clean error (no credentials) on a non-2xx STS response', async () => {
+    awsSetFetch(async () => ({ ok: false, status: 403, statusText: 'Forbidden' }));
+    await assert.rejects(
+      () => awsConnector.testConnection({ secrets: { accessKeyId: 'AKIA', secretAccessKey: 'xsecret' } }),
+      (err) => {
+        assert.match(err.message, /403/);
+        assert.doesNotMatch(err.message, /xsecret/);
+        return true;
+      }
+    );
+  });
+
+  it('never calls the metered Cost Explorer host', async () => {
+    let calledHost;
+    awsSetFetch(async (url) => { calledHost = new URL(url).hostname; return { ok: true, status: 200 }; });
+    await awsConnector.testConnection({ secrets: { accessKeyId: 'AKIA', secretAccessKey: 'secret' } });
+    assert.equal(calledHost, 'sts.amazonaws.com');
+  });
+});
+
 describe('aws_audit — auditAwsKey (sentinel probing)', () => {
   const secrets = { accessKeyId: 'AKIA', secretAccessKey: 'xsecret' };
 
@@ -2460,5 +2490,72 @@ describe('connectorFetch — redirect handling', () => {
     global.fetch = async () => ({ status: 200, ok: true });
     const res = await connectorFetch('https://example.com/x', { hosts: ['example.com'] });
     assert.equal(res.status, 200);
+  });
+});
+
+// ─── connectorFetch — path-level egress allowlist (§6.4) ──────────────────────
+
+describe('connectorFetch — endpoint allowlist', () => {
+  let originalAllowOutbound;
+  let originalFetch;
+
+  before(() => {
+    originalAllowOutbound = getAllowOutboundRow.get()?.value ?? 'false';
+    setAllowOutboundRow.run('true');
+  });
+
+  after(() => {
+    setAllowOutboundRow.run(originalAllowOutbound);
+  });
+
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  const ENDPOINTS = [{ method: 'GET', path: /^\/v1\/allowed$/ }];
+
+  it('throws on an allowlisted host but a path not in the declared endpoints', async () => {
+    global.fetch = async () => ({ status: 200, ok: true });
+    await assert.rejects(
+      () => connectorFetch('https://example.com/v1/not-allowed', { hosts: ['example.com'], endpoints: ENDPOINTS }),
+      /not a declared endpoint/i
+    );
+  });
+
+  it('throws on the right path but the wrong method', async () => {
+    global.fetch = async () => ({ status: 200, ok: true });
+    await assert.rejects(
+      () => connectorFetch('https://example.com/v1/allowed', { hosts: ['example.com'], endpoints: ENDPOINTS }, { method: 'POST' }),
+      /not a declared endpoint/i
+    );
+  });
+
+  it('allows a request matching a declared (method, path) pair', async () => {
+    global.fetch = async () => ({ status: 200, ok: true });
+    const res = await connectorFetch('https://example.com/v1/allowed', { hosts: ['example.com'], endpoints: ENDPOINTS });
+    assert.equal(res.status, 200);
+  });
+
+  it('falls back to host-only enforcement when a connector declares no endpoints', async () => {
+    global.fetch = async () => ({ status: 200, ok: true });
+    const res = await connectorFetch('https://example.com/anything', { hosts: ['example.com'] });
+    assert.equal(res.status, 200);
+  });
+});
+
+describe('connector endpoint declarations (§6.4)', () => {
+  it('every registered connector declares a non-empty endpoints array', () => {
+    // Uses the raw registry, not list() — list() strips `endpoints` before
+    // sending connector metadata to the frontend (RegExp doesn't serialize).
+    const { registry: rawRegistry } = require('./registry');
+    for (const def of rawRegistry.values()) {
+      assert.ok(
+        Array.isArray(def.endpoints) && def.endpoints.length > 0,
+        `${def.provider_key}: must declare endpoints (see server/connectors/registry.js contract)`
+      );
+      for (const e of def.endpoints) {
+        assert.equal(typeof e.method, 'string', `${def.provider_key}: endpoint method must be a string`);
+        assert.ok(e.path instanceof RegExp, `${def.provider_key}: endpoint path must be a RegExp`);
+      }
+    }
   });
 });

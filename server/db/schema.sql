@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS services (
   monthly_cost REAL,
   budget_cap   REAL,
   billing_day  INTEGER,
+  billing_period TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_period IN ('monthly','quarterly','yearly')),
+  -- Calendar month (1-12) the real charge lands in; only meaningful when
+  -- billing_period != 'monthly' (a quarterly plan repeats every 3 months
+  -- from this anchor). NULL for monthly services.
+  billing_month INTEGER CHECK (billing_month IS NULL OR (billing_month BETWEEN 1 AND 12)),
   icon         TEXT,
   is_seed      INTEGER NOT NULL DEFAULT 0,
   active       INTEGER NOT NULL DEFAULT 1,
@@ -31,6 +36,9 @@ CREATE TABLE IF NOT EXISTS service_connectors (
   provider_key TEXT    NOT NULL,
   enabled      INTEGER NOT NULL DEFAULT 0,
   config       TEXT,
+  -- Consecutive sync failures; reset to 0 on success. At 3+, the connector
+  -- is backed off to a 24h floor regardless of its configured syncIntervalHours.
+  consecutive_failures INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 

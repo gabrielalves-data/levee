@@ -4,6 +4,7 @@ const { Router } = require('express');
 const db = require('../db/database');
 const { get: getConnectorDef } = require('../connectors/registry');
 const { getSecret } = require('../secrets');
+const { CATEGORY, COST_MODEL, VALUE_TYPE, CONNECTOR_TYPE, BILLING_PERIOD } = require('../middleware/validate');
 
 const router = Router();
 
@@ -21,12 +22,12 @@ router.get('/export', (req, res) => {
   const services = db.prepare(`
     WITH svc AS (
       SELECT id, name, provider, category, cost_model, monthly_cost,
-             budget_cap, billing_day, icon, active,
+             budget_cap, billing_day, billing_period, billing_month, icon, active,
              provider_key, plan_key, connector_type, auto_available
       FROM   services
     )
     SELECT id, name, provider, category, cost_model, monthly_cost,
-           budget_cap, billing_day, icon, active,
+           budget_cap, billing_day, billing_period, billing_month, icon, active,
            provider_key, plan_key, connector_type, auto_available
     FROM   svc
     ORDER  BY category, name
@@ -117,25 +118,24 @@ router.post('/import', async (req, res) => {
   const REQUIRED_SVC  = ['name', 'provider', 'category', 'cost_model'];
   const REQUIRED_MET  = ['metric_key', 'label', 'value_type'];
   const REQUIRED_CONN = ['service', 'provider', 'provider_key'];
-  const VALID_CAT     = new Set(['cloud', 'ai_model', 'ai_api', 'tool', 'custom']);
-  const VALID_MODEL   = new Set(['flat', 'usage', 'hybrid']);
-  const VALID_VTYPE   = new Set(['number', 'percent', 'currency', 'date', 'text']);
-  const VALID_CONN_TYPE = new Set(['manual', 'catalog', 'api']);
 
   for (const svc of payload.services) {
     for (const f of REQUIRED_SVC) {
       if (!svc[f]) return res.status(400).json({ error: `Service missing field: ${f}` });
     }
-    if (!VALID_CAT.has(svc.category))   return res.status(400).json({ error: `Invalid category: ${svc.category}` });
-    if (!VALID_MODEL.has(svc.cost_model)) return res.status(400).json({ error: `Invalid cost_model: ${svc.cost_model}` });
-    if (svc.connector_type !== undefined && !VALID_CONN_TYPE.has(svc.connector_type)) {
+    if (!CATEGORY.has(svc.category))   return res.status(400).json({ error: `Invalid category: ${svc.category}` });
+    if (!COST_MODEL.has(svc.cost_model)) return res.status(400).json({ error: `Invalid cost_model: ${svc.cost_model}` });
+    if (svc.connector_type !== undefined && !CONNECTOR_TYPE.has(svc.connector_type)) {
       return res.status(400).json({ error: `Invalid connector_type: ${svc.connector_type}` });
+    }
+    if (svc.billing_period !== undefined && !BILLING_PERIOD.has(svc.billing_period)) {
+      return res.status(400).json({ error: `Invalid billing_period: ${svc.billing_period}` });
     }
     for (const m of svc.metrics ?? []) {
       for (const f of REQUIRED_MET) {
         if (!m[f]) return res.status(400).json({ error: `Metric missing field: ${f}` });
       }
-      if (!VALID_VTYPE.has(m.value_type)) return res.status(400).json({ error: `Invalid value_type: ${m.value_type}` });
+      if (!VALUE_TYPE.has(m.value_type)) return res.status(400).json({ error: `Invalid value_type: ${m.value_type}` });
     }
   }
 
@@ -152,7 +152,7 @@ router.post('/import', async (req, res) => {
   const patchSvc = db.prepare(`
     UPDATE services
     SET category = ?, cost_model = ?, monthly_cost = ?, budget_cap = ?,
-        billing_day = ?, icon = ?, active = ?,
+        billing_day = ?, billing_period = ?, billing_month = ?, icon = ?, active = ?,
         provider_key = ?, plan_key = ?, connector_type = ?, auto_available = ?
     WHERE id = ?
   `);
@@ -212,6 +212,7 @@ router.post('/import', async (req, res) => {
       if (existing) {
         patchSvc.run(svc.category, svc.cost_model, svc.monthly_cost ?? null,
                      svc.budget_cap ?? null, svc.billing_day ?? null,
+                     svc.billing_period ?? 'monthly', svc.billing_month ?? null,
                      svc.icon ?? null, svc.active ?? 1,
                      svc.provider_key ?? null, svc.plan_key ?? null,
                      svc.connector_type ?? 'manual', svc.auto_available ?? 0,
@@ -219,11 +220,12 @@ router.post('/import', async (req, res) => {
         svcId = existing.id;
       } else {
         const r = db.prepare(`
-          INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, icon, active, provider_key, plan_key, connector_type, auto_available)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, billing_period, billing_month, icon, active, provider_key, plan_key, connector_type, auto_available)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(svc.name, svc.provider, svc.category, svc.cost_model,
                svc.monthly_cost ?? null, svc.budget_cap ?? null,
-               svc.billing_day ?? null, svc.icon ?? null, svc.active ?? 1,
+               svc.billing_day ?? null, svc.billing_period ?? 'monthly', svc.billing_month ?? null,
+               svc.icon ?? null, svc.active ?? 1,
                svc.provider_key ?? null, svc.plan_key ?? null,
                svc.connector_type ?? 'manual', svc.auto_available ?? 0);
         svcId = r.lastInsertRowid;

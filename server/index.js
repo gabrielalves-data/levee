@@ -2,7 +2,7 @@
 
 const express = require('express');
 const helmet = require('helmet');
-const { localGuard, LAUNCH_TOKEN } = require('./middleware/localGuard');
+const { localGuard, setLaunchToken } = require('./middleware/localGuard');
 const servicesRouter    = require('./routes/services');
 const metricsRouter     = require('./routes/metrics');
 const widgetRouter      = require('./routes/widget');
@@ -57,12 +57,32 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'internal error' });
 });
 
-const server = app.listen(PORT, HOST, () => {
-  const { port } = server.address();
-  console.log(`[levee] listening on ${HOST}:${port}`);
-  console.log('[levee] server ready (token set)');
-  if (process.parentPort) process.parentPort.postMessage({ type: 'ready', port });
-  startCrons();
-});
+function startListening() {
+  const server = app.listen(PORT, HOST, () => {
+    const { port } = server.address();
+    console.log(`[levee] listening on ${HOST}:${port}`);
+    console.log('[levee] server ready (token set)');
+    if (process.parentPort) process.parentPort.postMessage({ type: 'ready', port });
+    startCrons();
+  });
+}
+
+if (process.parentPort) {
+  // Packaged builds receive the real launch token over the utilityProcess
+  // message channel (see electron/main.js) instead of this child process's
+  // env — never in /proc/<pid>/environ. Wait for it before the server starts
+  // accepting any connections. Dev (`node server/index.js`, no Electron
+  // parent) has no parentPort and keeps the LEVEE_TOKEN env fallback in
+  // localGuard.js.
+  process.parentPort.once('message', (e) => {
+    const msg = e?.data ?? e;
+    if (msg?.type === 'token' && typeof msg.token === 'string') {
+      setLaunchToken(msg.token);
+    }
+    startListening();
+  });
+} else {
+  startListening();
+}
 
 module.exports = app;

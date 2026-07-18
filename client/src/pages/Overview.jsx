@@ -4,6 +4,7 @@ import { useServices } from '../hooks/useServices'
 import { useSnapshots } from '../hooks/useSnapshots'
 import { useUpcomingResets } from '../hooks/useMetrics'
 import { computePace } from '../utils/pace'
+import { amortizedMonthly } from '../utils/billing'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -63,7 +64,7 @@ export default function Overview() {
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Loading…</div>
   if (isError)   return <div className="p-6 text-red-400 text-sm">Failed to load services.</div>
 
-  const total       = services.reduce((sum, s) => sum + (s.monthly_cost ?? 0), 0)
+  const total       = services.reduce((sum, s) => sum + amortizedMonthly(s), 0)
   const budgetTotal = services.reduce((sum, s) => sum + (s.budget_cap ?? 0), 0)
   const pace        = computePace(total, budgetTotal)
 

@@ -13,6 +13,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.linode.com'];
 const ENDPOINT = 'https://api.linode.com/v4/account';
+const ENDPOINTS = [{ method: 'GET', path: /^\/v4\/account$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -31,13 +32,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Personal access token', kind: 'secret', required: true,
       help: 'Create a token with the Account scope set to Read Only — no other resource access needed.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'Authorization': `Bearer ${secrets.apiKey}`,
         'Accept':        'application/json',

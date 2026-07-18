@@ -18,6 +18,10 @@ const { register } = require('./registry');
 
 const HOSTS      = ['api.github.com'];
 const GH_VERSION = '2022-11-28';
+const ENDPOINTS = [
+  { method: 'GET', path: /^\/organizations\/[^/]+\/settings\/billing\/usage$/ },
+  { method: 'GET', path: /^\/orgs\/[^/]+\/settings\/billing\/actions$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -42,6 +46,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'GitHub PAT',   kind: 'secret', required: true, help: 'Org billing read: admin:org (classic) or the org Plan/Administration permission (fine-grained).' },
     { name: 'org',    label: 'Organization', kind: 'config', required: true, placeholder: 'my-github-org' },
@@ -60,7 +65,7 @@ const connector = {
     // Preferred: enhanced billing in dollars.
     const usageRes = await _fetch(
       `https://api.github.com/organizations/${encodeURIComponent(org)}/settings/billing/usage`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       { headers }
     );
     if (usageRes.ok) {
@@ -82,7 +87,7 @@ const connector = {
     // Fallback: classic Actions minutes only.
     const actRes = await _fetch(
       `https://api.github.com/orgs/${encodeURIComponent(org)}/settings/billing/actions`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       { headers }
     );
     if (!actRes.ok) {

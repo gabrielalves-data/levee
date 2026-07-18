@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMetrics, useUpsertMetric } from '../../hooks/useMetrics'
 import { useSnapshots } from '../../hooks/useSnapshots'
 import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
-import { useAllowOutbound, useUpsertConnector, useSyncConnector, useAuditConnector, useDeleteConnector } from '../../hooks/useConnectors'
+import { useAllowOutbound, useUpsertConnector, useSyncConnector, useTestConnector, useAuditConnector, useDeleteConnector } from '../../hooks/useConnectors'
 import { useProviders } from '../../hooks/useProviders'
 
 const CATEGORY_STYLES = {
@@ -284,12 +284,14 @@ function FormField({ field, value, onChange }) {
 function ApiPanel({ service, apiKey, authType, fields }) {
   const upsert = useUpsertConnector()
   const sync = useSyncConnector()
+  const test = useTestConnector()
   const audit = useAuditConnector()
   const disconnect = useDeleteConnector()
   const { allowed } = useAllowOutbound()
   const [values, setValues] = useState({})
   const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
+  const [testResult, setTestResult] = useState('')
 
   const isApiConnected = service.connector_type === 'api'
 
@@ -331,6 +333,17 @@ function ApiPanel({ service, apiKey, authType, fields }) {
       await sync.mutateAsync(service.id)
     } catch {
       setError('Sync failed')
+    }
+  }
+
+  async function handleTest() {
+    setError('')
+    setTestResult('')
+    try {
+      await test.mutateAsync(service.id)
+      setTestResult('ok')
+    } catch {
+      setTestResult('failed')
     }
   }
 
@@ -423,6 +436,15 @@ function ApiPanel({ service, apiKey, authType, fields }) {
             <Icons.RefreshCw size={11} className={sync.isPending ? 'animate-spin' : ''} />
             {sync.isPending ? 'Syncing…' : 'Sync now'}
           </button>
+          <button
+            onClick={handleTest}
+            disabled={!allowed || test.isPending}
+            title={!allowed ? 'Enable outbound connections in Settings to test' : 'Confirm the stored credential works, without a full sync'}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white rounded-lg transition-colors"
+          >
+            <Icons.Zap size={11} className={test.isPending ? 'animate-pulse' : ''} />
+            {test.isPending ? 'Testing…' : 'Test connection'}
+          </button>
           {providerKey === 'aws_cost' && (
             <button
               onClick={handleAudit}
@@ -447,6 +469,8 @@ function ApiPanel({ service, apiKey, authType, fields }) {
         {!allowed && (
           <p className="text-xs text-amber-500">Enable outbound connections in Settings to sync</p>
         )}
+        {testResult === 'ok' && <p className="text-xs text-emerald-400">Connection OK</p>}
+        {testResult === 'failed' && <p className="text-xs text-red-400">Test connection failed</p>}
         {error && <p className="text-xs text-red-400">{error}</p>}
       </div>
     </div>
@@ -485,6 +509,14 @@ function ConnectSection({ service }) {
                 ? `Catalog: ${service.plan_key ?? ''}`
                 : 'API connected'}
             </span>
+            {service.consecutive_failures >= 3 && (
+              <span
+                className="text-xs text-amber-500"
+                title={`${service.consecutive_failures} syncs failed in a row — backed off to a 24h retry floor`}
+              >
+                (backed off)
+              </span>
+            )}
           </div>
           <button
             onClick={() => setOpen(true)}

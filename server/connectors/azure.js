@@ -15,6 +15,10 @@ const { register } = require('./registry');
 
 const HOSTS    = ['login.microsoftonline.com', 'management.azure.com'];
 const API_VER  = '2023-11-01';
+const ENDPOINTS = [
+  { method: 'POST', path: /^\/[^/]+\/oauth2\/v2\.0\/token$/ },
+  { method: 'POST', path: /^\/subscriptions\/[^/]+\/providers\/Microsoft\.CostManagement\/query$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -42,6 +46,7 @@ const connector = {
   authType:       'oauthClientCredentials',
   secretAccounts: ['clientSecret'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'tenantId',       label: 'Tenant ID',       kind: 'config', required: true },
     { name: 'clientId',       label: 'Client ID',       kind: 'config', required: true },
@@ -65,7 +70,7 @@ const connector = {
     });
     const tokenRes = await _fetch(
       `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -86,7 +91,7 @@ const connector = {
     };
     const queryRes = await _fetch(
       `https://management.azure.com/subscriptions/${encodeURIComponent(subscriptionId)}/providers/Microsoft.CostManagement/query?api-version=${API_VER}`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       {
         method:  'POST',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },

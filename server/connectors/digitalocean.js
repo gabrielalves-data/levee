@@ -13,6 +13,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.digitalocean.com'];
 const ENDPOINT = 'https://api.digitalocean.com/v2/customers/my/balance';
+const ENDPOINTS = [{ method: 'GET', path: /^\/v2\/customers\/my\/balance$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -32,13 +33,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Personal access token', kind: 'secret', required: true,
       help: 'Create a scoped token with only billing:read access (Read-only) — no write access needed.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       headers: {
         'Authorization': `Bearer ${secrets.apiKey}`,
         'Content-Type':  'application/json',

@@ -18,6 +18,11 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['api.twilio.com'];
+// {Sid} is the interpolated Account SID — part of the path pattern, not literal.
+const ENDPOINTS = [
+  { method: 'GET', path: /^\/2010-04-01\/Accounts\/[^/]+\/Usage\/Records\/ThisMonth\.json$/ },
+  { method: 'GET', path: /^\/2010-04-01\/Accounts\/[^/]+\/Balance\.json$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -44,12 +49,29 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKeySid', 'apiKeySecret'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'accountSid',    label: 'Account SID',    kind: 'config', required: true, placeholder: 'ACxxxxxxxx' },
     { name: 'apiKeySid',     label: 'API key SID',    kind: 'secret', required: true, placeholder: 'SKxxxxxxxx' },
     { name: 'apiKeySecret',  label: 'API key secret', kind: 'secret', required: true,
       help: 'Create a Standard API key in Twilio Console → Account → API keys. Do not use the account Auth Token.' },
   ],
+
+  // One-release back-compat: pre-H4 installs stored the account Auth Token as
+  // a single `apiKey` secret and authenticated as accountSid:authToken. Feed
+  // those into the apiKeySid/apiKeySecret slots fetch() already reads so its
+  // Basic-auth line needs no special-casing — accountSid:authToken and
+  // apiKeySid:apiKeySecret are both just "Basic base64(user:pass)" pairs.
+  async resolveSecrets({ serviceId, secrets, missing, config, getSecret }) {
+    if (!missing.includes('apiKeySid') && !missing.includes('apiKeySecret')) return;
+    const legacyToken = await getSecret(`connector:${serviceId}:apiKey`);
+    if (legacyToken == null) {
+      throw new Error(`Missing credential "${missing[0]}" — open the service card and reconnect.`);
+    }
+    if (!config?.accountSid) throw new Error('Config missing required field: accountSid');
+    secrets.apiKeySid = config.accountSid;
+    secrets.apiKeySecret = legacyToken;
+  },
 
   async fetch({ secrets, config }) {
     const accountSid = config?.accountSid;
@@ -61,7 +83,7 @@ const connector = {
 
     const usageRes = await _fetch(
       `${base}/Usage/Records/ThisMonth.json?Category=totalprice`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       { headers }
     );
     if (!usageRes.ok) {
@@ -80,7 +102,7 @@ const connector = {
     ];
 
     // Balance is a best-effort add-on; don't fail the whole sync if it 4xxs.
-    const balRes = await _fetch(`${base}/Balance.json`, { hosts: HOSTS }, { headers });
+    const balRes = await _fetch(`${base}/Balance.json`, { hosts: HOSTS, endpoints: ENDPOINTS }, { headers });
     if (balRes.ok) {
       const { balance, currency: balCurrency } = mapBalanceResponse(await balRes.json());
       metrics.push({

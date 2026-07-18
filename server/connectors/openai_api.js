@@ -9,6 +9,10 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['api.openai.com'];
+const ENDPOINTS = [
+  { method: 'GET', path: /^\/v1\/organization\/costs$/ },
+  { method: 'GET', path: /^\/v1\/organization\/usage\/completions$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -33,7 +37,7 @@ async function fetchAllPages(baseUrl, params, headers) {
       Object.entries({ ...params, ...(nextPage ? { page: nextPage } : {}) })
         .map(([k, v]) => [k, String(v)])
     );
-    const res = await _fetch(`${baseUrl}?${qp}`, { hosts: HOSTS }, { headers });
+    const res = await _fetch(`${baseUrl}?${qp}`, { hosts: HOSTS, endpoints: ENDPOINTS }, { headers });
     if (!res.ok) {
       throw new Error(`OpenAI API returned ${res.status}: ${res.statusText}`);
     }
@@ -77,6 +81,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Admin API key', kind: 'secret', required: true,
       help: 'Admin key restricted to read-only usage + costs scopes — not a project key.' },

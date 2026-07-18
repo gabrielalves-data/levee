@@ -14,6 +14,10 @@ const http = require('./http');
 const { register } = require('./registry');
 
 const HOSTS = ['sentry.io'];
+const ENDPOINTS = [
+  { method: 'GET', path: /^\/api\/0\/organizations\/[^/]+\/stats_v2\/$/ },
+  { method: 'GET', path: /^\/api\/0\/subscriptions\/[^/]+\/$/ },
+];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -55,6 +59,7 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Auth token',        kind: 'secret', required: true,
       help: 'Scope the token to org:read (add org:billing if your plan exposes it) — nothing else is needed.' },
@@ -81,12 +86,12 @@ const connector = {
     const [statsRes, subRes] = await Promise.all([
       _fetch(
         `https://sentry.io/api/0/organizations/${encodeURIComponent(org)}/stats_v2/?${statsParams}`,
-        { hosts: HOSTS },
+        { hosts: HOSTS, endpoints: ENDPOINTS },
         { headers }
       ),
       _fetch(
         `https://sentry.io/api/0/subscriptions/${encodeURIComponent(org)}/`,
-        { hosts: HOSTS },
+        { hosts: HOSTS, endpoints: ENDPOINTS },
         { headers }
       ).catch(() => null), // billing endpoint optional; missing scope → skip
     ]);

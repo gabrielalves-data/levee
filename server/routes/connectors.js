@@ -4,7 +4,8 @@ const { Router } = require('express');
 const db = require('../db/database');
 const { list: listConnectors, get: getConnector } = require('../connectors/registry');
 const { setSecret, getSecret, deleteSecret } = require('../secrets');
-const { syncService, upsertMetrics } = require('../connectors/sync');
+const { syncService, upsertMetrics, resolveConnectorSecrets } = require('../connectors/sync');
+const { isValidId } = require('../middleware/validate');
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get('/providers', (_req, res) => {
 // PUT /api/connectors/:serviceId — upsert service_connectors row, set connector_type='api'
 router.put('/:serviceId', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
-  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+  if (!isValidId(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
 
   const { providerKey, config, secret, secrets } = req.body;
 
@@ -70,7 +71,7 @@ router.put('/:serviceId', async (req, res) => {
 // DELETE /api/connectors/:serviceId — disable + deleteSecret
 router.delete('/:serviceId', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
-  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+  if (!isValidId(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
 
   const row = db.prepare(
     'SELECT provider_key FROM service_connectors WHERE service_id = ?'
@@ -102,16 +103,49 @@ router.delete('/:serviceId', async (req, res) => {
 // POST /api/connectors/:serviceId/sync — manual sync trigger
 router.post('/:serviceId/sync', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
-  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+  if (!isValidId(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
   const result = await syncService(serviceId);
   res.json(result);
+});
+
+// POST /api/connectors/:serviceId/test — cheapest-read connectivity check (§6.5).
+// Confirms the stored credential is alive before the first sync cycle, without
+// touching service_metrics or sync_status — distinct from a real sync. Most
+// connectors have no dedicated testConnection hook, so this falls back to their
+// own fetch() (already the cheapest available authenticated read for that
+// provider) and discards the result; AWS defines a dedicated STS-based check
+// since its fetch() calls the metered Cost Explorer endpoint.
+router.post('/:serviceId/test', async (req, res) => {
+  const serviceId = Number(req.params.serviceId);
+  if (!isValidId(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+
+  const row = db.prepare(
+    'SELECT provider_key, config FROM service_connectors WHERE service_id = ? AND enabled = 1'
+  ).get(serviceId);
+  if (!row) return res.status(404).json({ error: 'Connector not found' });
+
+  const connector = getConnector(row.provider_key);
+  if (!connector) return res.status(400).json({ error: `Unknown provider: ${row.provider_key}` });
+
+  try {
+    const config = row.config ? JSON.parse(row.config) : {};
+    const secrets = await resolveConnectorSecrets(serviceId, connector, config);
+    if (typeof connector.testConnection === 'function') {
+      await connector.testConnection({ secrets, config });
+    } else {
+      await connector.fetch({ secrets, config });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message ?? String(err) });
+  }
 });
 
 // POST /api/connectors/:serviceId/audit — opt-in least-privilege credential audit.
 // Only active for connectors that declare an `audit` hook (currently AWS only).
 router.post('/:serviceId/audit', async (req, res) => {
   const serviceId = Number(req.params.serviceId);
-  if (!Number.isInteger(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
+  if (!isValidId(serviceId)) return res.status(400).json({ error: 'Invalid serviceId' });
 
   const row = db.prepare(
     'SELECT provider_key FROM service_connectors WHERE service_id = ? AND enabled = 1'

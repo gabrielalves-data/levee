@@ -51,6 +51,8 @@ const serviceMigrations = [
   ['sync_error',   'ALTER TABLE services ADD COLUMN sync_error TEXT'],
   ['auto_available', 'ALTER TABLE services ADD COLUMN auto_available INTEGER NOT NULL DEFAULT 0'],
   ['provider_key', 'ALTER TABLE services ADD COLUMN provider_key TEXT'],
+  ["billing_period", "ALTER TABLE services ADD COLUMN billing_period TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_period IN ('monthly','quarterly','yearly'))"],
+  ['billing_month', 'ALTER TABLE services ADD COLUMN billing_month INTEGER CHECK (billing_month IS NULL OR (billing_month BETWEEN 1 AND 12))'],
 ];
 const addedAutoAvailable = !serviceColumns.has('auto_available');
 const addedProviderKey = !serviceColumns.has('provider_key');
@@ -66,6 +68,15 @@ const metricColumns = new Set(
 );
 if (!metricColumns.has('source')) {
   db.exec(`ALTER TABLE service_metrics ADD COLUMN source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','sync','catalog'))`);
+}
+
+// Idempotent migration: add `consecutive_failures` to pre-existing
+// `service_connectors` tables (see §5.4 — drives sync backoff).
+const connectorColumns = new Set(
+  db.prepare('PRAGMA table_info(service_connectors)').all().map((c) => c.name)
+);
+if (!connectorColumns.has('consecutive_failures')) {
+  db.exec(`ALTER TABLE service_connectors ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0`);
 }
 
 // Backfill auto_available on pre-existing seed rows: every seeded service has a
@@ -122,3 +133,4 @@ if (n === 0) {
 }
 
 module.exports = db;
+module.exports.DB_PATH = DB_PATH;

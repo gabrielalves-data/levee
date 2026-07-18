@@ -14,6 +14,7 @@ const { register } = require('./registry');
 // Allowlist every supported Datadog site host; the connector calls exactly one of them.
 const SITES = ['datadoghq.com', 'us3.datadoghq.com', 'us5.datadoghq.com', 'datadoghq.eu', 'ap1.datadoghq.com'];
 const HOSTS = SITES.map(s => `api.${s}`);
+const ENDPOINTS = [{ method: 'GET', path: /^\/api\/v2\/usage\/estimated_cost$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -41,6 +42,7 @@ const connector = {
   authType:       'apiKeyPair',
   secretAccounts: ['apiKey', 'appKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'API key',         kind: 'secret', required: true,
       help: 'API keys have no scoping — use a key dedicated to Levee so it can be revoked independently.' },
@@ -56,7 +58,7 @@ const connector = {
     const params = new URLSearchParams({ view: 'summary', start_month: startOfMonth() });
     const res = await _fetch(
       `https://${host}/api/v2/usage/estimated_cost?${params}`,
-      { hosts: HOSTS },
+      { hosts: HOSTS, endpoints: ENDPOINTS },
       {
         headers: {
           'DD-API-KEY':         secrets.apiKey,

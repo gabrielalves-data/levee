@@ -13,6 +13,7 @@ const { register } = require('./registry');
 
 const HOSTS    = ['api.linear.app'];
 const ENDPOINT = 'https://api.linear.app/graphql';
+const ENDPOINTS = [{ method: 'POST', path: /^\/graphql$/ }];
 
 const QUERY = `{
   organization {
@@ -41,13 +42,14 @@ const connector = {
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   fields: [
     { name: 'apiKey', label: 'Personal API key', kind: 'secret', required: true,
       help: 'Linear personal API keys are full-account scope — no narrower read-only option; use a key dedicated to Levee.' },
   ],
 
   async fetch({ secrets }) {
-    const res = await _fetch(ENDPOINT, { hosts: HOSTS }, {
+    const res = await _fetch(ENDPOINT, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       method:  'POST',
       headers: {
         'Authorization': secrets.apiKey, // Linear uses bare key, no "Bearer" prefix

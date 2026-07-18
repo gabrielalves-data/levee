@@ -88,7 +88,6 @@ async function startServer() {
   // handled by `electron-rebuild` in dev and electron-builder at package time.
   const env = {
     ...process.env,
-    LEVEE_TOKEN:  LAUNCH_TOKEN,
     LEVEE_DB_KEY: dbKey,
   };
   // Only dev pins a fixed port (Vite proxy target). Packaged builds omit PORT
@@ -99,6 +98,9 @@ async function startServer() {
     env,
     stdio: 'inherit',
   });
+  // Sent over the message channel, never the child's env (see server/index.js) —
+  // /proc/<pid>/environ on Linux would otherwise expose it to any same-user process.
+  serverProcess.postMessage({ type: 'token', token: LAUNCH_TOKEN });
 
   // Wait for the server's own "ready" message over the utility-process
   // message channel instead of polling HTTP: an HTTP probe can't tell our

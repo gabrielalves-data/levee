@@ -6,7 +6,10 @@ const path   = require('path');
 const os     = require('os');
 const fs     = require('fs');
 const db     = require('../db/database');
+const { DB_PATH } = db;
 const { getSecret, setSecret, deleteSecret } = require('../secrets');
+
+const PRE_REKEY_PATH = `${DB_PATH}.pre-rekey`;
 
 const router  = Router();
 const CFG_DIR  = path.join(os.homedir(), '.levee');
@@ -53,14 +56,20 @@ router.post('/toggle', async (req, res) => {
         await deleteSecret('db-encryption-key');
         throw new Error('Keychain verification failed; encryption not enabled.');
       }
+      // Free insurance in case rekey corrupts the file mid-write — kept on
+      // disk for manual recovery if the try block below throws.
+      fs.copyFileSync(DB_PATH, PRE_REKEY_PATH);
       try {
         // SQLite3MultipleCiphers cannot rekey a WAL-mode database.
         db.pragma('journal_mode = DELETE');
         db.pragma(`rekey="${passphrase}"`);
+        const check = db.pragma('integrity_check', { simple: true });
+        if (check !== 'ok') throw new Error(`integrity_check failed after rekey: ${check}`);
         db.pragma('journal_mode = WAL');
+        fs.rmSync(PRE_REKEY_PATH);
       } catch (err) {
         await deleteSecret('db-encryption-key'); // don't leave a dangling key
-        throw err;
+        throw new Error(`${err.message} — pre-rekey backup left at ${PRE_REKEY_PATH} for manual recovery`);
       }
       writeConfig({ dbEncrypted: true });
     } else {
@@ -68,9 +77,17 @@ router.post('/toggle', async (req, res) => {
       if (!passphrase) return res.status(500).json({ error: 'No encryption key found in keychain' });
       // Rekey to plaintext first; only drop the keychain entry once that
       // succeeds, so a failed rekey never leaves an encrypted DB with no key.
-      db.pragma('journal_mode = DELETE');
-      db.pragma(`rekey=""`);
-      db.pragma('journal_mode = WAL');
+      fs.copyFileSync(DB_PATH, PRE_REKEY_PATH);
+      try {
+        db.pragma('journal_mode = DELETE');
+        db.pragma(`rekey=""`);
+        const check = db.pragma('integrity_check', { simple: true });
+        if (check !== 'ok') throw new Error(`integrity_check failed after rekey: ${check}`);
+        db.pragma('journal_mode = WAL');
+        fs.rmSync(PRE_REKEY_PATH);
+      } catch (err) {
+        throw new Error(`${err.message} — pre-rekey backup left at ${PRE_REKEY_PATH} for manual recovery`);
+      }
       await deleteSecret('db-encryption-key');
       writeConfig({ dbEncrypted: false });
     }

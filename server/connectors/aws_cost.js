@@ -18,6 +18,15 @@ const HOST    = 'ce.us-east-1.amazonaws.com';
 const REGION  = 'us-east-1';
 const SERVICE = 'ce';
 const TARGET  = 'AWSInsightsIndexService.GetCostAndUsage';
+const ENDPOINTS = [{ method: 'POST', path: /^\/$/ }];
+
+// STS GetCallerIdentity needs zero IAM permissions and costs nothing, unlike
+// Cost Explorer ($0.01/request) — used only for the "Test connection" button
+// (§6.5), never during a normal sync. Own host/endpoint pair, kept separate
+// from the standing Cost Explorer allowlist, same pattern as aws_audit.js.
+const STS_HOST      = 'sts.amazonaws.com';
+const STS_HOSTS     = [STS_HOST];
+const STS_ENDPOINTS = [{ method: 'POST', path: /^\/$/ }];
 
 // Injectable for tests — never reassigned in production code.
 let _fetch = (...args) => http.connectorFetch(...args);
@@ -60,6 +69,7 @@ const connector = {
   authType:       'awsKeyPair',
   secretAccounts: ['accessKeyId', 'secretAccessKey'],
   hosts:          HOSTS,
+  endpoints:      ENDPOINTS,
   // Cost Explorer bills $0.01/request; MTD cost doesn't need 4x/day freshness.
   syncIntervalHours: 24,
   fields: [
@@ -87,7 +97,7 @@ const connector = {
       secretAccessKey: secrets.secretAccessKey,
       extraHeaders:    { 'x-amz-target': TARGET },
     });
-    const res = await _fetch(`https://${HOST}/`, { hosts: HOSTS }, {
+    const res = await _fetch(`https://${HOST}/`, { hosts: HOSTS, endpoints: ENDPOINTS }, {
       method: 'POST',
       headers,
       body,
@@ -119,6 +129,31 @@ const connector = {
   // Opt-in sentinel-probe audit (see aws_audit.js) — never called during a
   // normal sync, only from the "Audit key permissions" button.
   audit: auditAwsKey,
+
+  // "Test connection" (§6.5) — cheapest possible authenticated call: STS
+  // GetCallerIdentity needs no IAM permissions and isn't billed, so it
+  // confirms the key is alive without touching Cost Explorer's paid endpoint.
+  async testConnection({ secrets }) {
+    const body = 'Action=GetCallerIdentity&Version=2011-06-15';
+    const headers = signAwsRequest({
+      method:          'POST',
+      host:            STS_HOST,
+      region:          REGION,
+      service:         'sts',
+      contentType:     'application/x-www-form-urlencoded; charset=utf-8',
+      body,
+      accessKeyId:     secrets.accessKeyId,
+      secretAccessKey: secrets.secretAccessKey,
+    });
+    const res = await _fetch(`https://${STS_HOST}/`, { hosts: STS_HOSTS, endpoints: STS_ENDPOINTS }, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    if (!res.ok) {
+      throw new Error(`AWS STS returned ${res.status}: ${res.statusText}`);
+    }
+  },
 };
 
 register('aws_cost', connector);
