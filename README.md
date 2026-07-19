@@ -19,7 +19,7 @@ and reviewing rigorously rather than line-by-line authorship.
 ## Setup
 
 ```sh
-npm install                # installs deps + rebuilds native modules (better-sqlite3, keytar) for Electron's ABI
+npm install                # installs deps + rebuilds native modules (better-sqlite3) for Electron's ABI
 cd server && npm install   # install server deps
 npm run dev                # starts server + client + electron concurrently
 ```
@@ -64,7 +64,7 @@ the check reports that updates are only available in the installed app.
 | Backend    | Express.js (loopback only)         | REST API on 127.0.0.1:3001     |
 | Desktop    | Electron                           | Tray, hotkey, overlay          |
 | DB         | better-sqlite3                     | ~/.devcost/devcost.db (0600)   |
-| Secrets    | keytar                             | OS keychain, never in DB       |
+| Secrets    | Electron `safeStorage`             | OS-encrypted, never in DB      |
 | Connectors | Per-provider modules               | Live API pull, secrets in OS keychain |
 
 ## Data retrieval modes
@@ -130,7 +130,7 @@ all other outbound requests.
 - DNS-rebinding protection: non-loopback `Host` rejected; **any** `Origin` header rejected
 - Electron: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, strict CSP
 - DB file and directory have restrictive OS permissions (0600 / 0700)
-- API secrets stored in OS keychain via keytar — never written to SQLite or exports
+- API secrets stored via Electron `safeStorage` — never written to SQLite or exports
 - Connector HTTP client enforces a per-connector hostname allowlist; no other outbound calls permitted
 - `localOAuth` connectors read a token another app already stores locally (explicit per-service consent required); the token is held in memory only during sync and never persisted
 - The auto-updater is the only outbound path outside a connector, and it fires **only** when the user clicks "Check for updates" — no automatic/background checks; no token bundled in the app

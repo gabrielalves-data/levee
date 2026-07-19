@@ -4,6 +4,12 @@ const db = require('../db/database');
 const { get: getConnector } = require('./registry');
 const { getSecret } = require('../secrets');
 
+// Injectable for tests — never reassigned in production code. secrets.js now
+// proxies to the Electron main process over parentPort (§4.1), so it can't
+// resolve at all under a plain `node --test` run outside Electron.
+let _getSecret = getSecret;
+function _setGetSecretForTest(fn) { _getSecret = fn; }
+
 const upsertMetric = db.prepare(`
   INSERT INTO service_metrics
     (service_id, metric_key, label, value_type, value_num, value_text, unit, source, updated_at)
@@ -51,13 +57,13 @@ async function resolveConnectorSecrets(serviceId, connector, config) {
   const secrets = {};
   const missing = [];
   for (const account of connector.secretAccounts ?? []) {
-    const value = await getSecret(`connector:${serviceId}:${account}`);
+    const value = await _getSecret(`connector:${serviceId}:${account}`);
     if (value == null) { missing.push(account); continue; }
     secrets[account] = value;
   }
   if (missing.length > 0) {
     if (typeof connector.resolveSecrets === 'function') {
-      await connector.resolveSecrets({ serviceId, secrets, missing, config, getSecret });
+      await connector.resolveSecrets({ serviceId, secrets, missing, config, getSecret: _getSecret });
     } else {
       throw new Error(`Missing credential "${missing[0]}" — open the service card and reconnect.`);
     }
@@ -108,4 +114,4 @@ async function syncService(serviceId) {
   }
 }
 
-module.exports = { syncService, upsertMetrics: runUpsertMetrics, resolveConnectorSecrets };
+module.exports = { syncService, upsertMetrics: runUpsertMetrics, resolveConnectorSecrets, _setGetSecretForTest };

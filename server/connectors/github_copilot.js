@@ -29,7 +29,7 @@ function mapBillingResponse(body, plan) {
 
 const connector = {
   label:          'GitHub Copilot (Org)',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

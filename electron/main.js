@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  app, BrowserWindow, Tray, Menu,
+  app, BrowserWindow, Tray, Menu, dialog,
   globalShortcut, ipcMain, nativeImage, utilityProcess,
 } = require('electron');
 const path   = require('path');
@@ -16,9 +16,7 @@ const {
   pillBoundsFor,
 } = require('./overlay');
 const { setupUpdater } = require('./updater');
-
-let keytar;
-try { keytar = require('keytar'); } catch { keytar = null; }
+const secretStore = require('./secretStore');
 
 // Packaged builds let the server bind an OS-assigned ephemeral port per
 // launch, reported back over the utilityProcess message channel — nothing
@@ -40,6 +38,17 @@ function saveConfig(cfg) {
 // groups the taskbar entry / notifications under our own app id.
 app.setName('Levee');
 app.setAppUserModelId('com.gabriel.levee');
+
+// Prevent a second launch (manual + login-item, or a double-click while
+// already running) from forking a second server/token/cron set and fighting
+// over the same WAL-mode DB file.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+app.on('second-instance', () => {
+  mainWin?.show();
+  mainWin?.focus();
+});
 
 // Window/taskbar icon. Packaged builds carry build/icon.*; dev falls back to the
 // PNG logo so the icon is correct even before packaging.
@@ -74,13 +83,17 @@ function createTrayIcon() {
 }
 
 async function startServer() {
+  const cfg = getConfig();
   let dbKey = '';
-  try {
-    const cfg = getConfig();
-    if (cfg.dbEncrypted && keytar) {
-      dbKey = (await keytar.getPassword('levee', 'db-encryption-key')) ?? '';
+  if (cfg.dbEncrypted) {
+    // Encryption is on record as enabled — a missing key here means the DB
+    // would either open unencrypted-but-actually-encrypted (garbage reads) or
+    // fail cryptically at the pragma stage. Fail loudly instead.
+    dbKey = secretStore.getSecret('db-encryption-key') ?? '';
+    if (!dbKey) {
+      throw new Error('[levee] database is marked encrypted but no key was found in secret storage — refusing to start');
     }
-  } catch { /* config absent or unreadable — open unencrypted */ }
+  }
 
   // Run the server under Electron's bundled Node via utilityProcess.fork, so a
   // packaged app needs no system Node install. This requires the native modules
@@ -101,6 +114,22 @@ async function startServer() {
   // Sent over the message channel, never the child's env (see server/index.js) —
   // /proc/<pid>/environ on Linux would otherwise expose it to any same-user process.
   serverProcess.postMessage({ type: 'token', token: LAUNCH_TOKEN });
+
+  // server/secrets.js runs in this utility process and has no access to
+  // `electron`'s safeStorage — it proxies every get/set/delete here, where
+  // secretStore.js owns the ciphertext file and the actual encrypt/decrypt calls.
+  serverProcess.on('message', (msg) => {
+    if (msg?.type !== 'secret-request') return;
+    const reply = { type: 'secret-reply', requestId: msg.requestId };
+    try {
+      if (msg.op === 'get') reply.value = secretStore.getSecret(msg.account);
+      else if (msg.op === 'set') { secretStore.setSecret(msg.account, msg.value); reply.value = true; }
+      else if (msg.op === 'delete') { secretStore.deleteSecret(msg.account); reply.value = true; }
+    } catch (err) {
+      reply.error = err.message;
+    }
+    serverProcess.postMessage(reply);
+  });
 
   // Wait for the server's own "ready" message over the utility-process
   // message channel instead of polling HTTP: an HTTP probe can't tell our
@@ -139,6 +168,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      devTools: !app.isPackaged,
     },
   });
 
@@ -222,13 +252,20 @@ app.whenReady().then(async () => {
     saveConfig({ ...cfg, firstRunDone: true });
   }
 
-  await startServer();
+  try {
+    await startServer();
+  } catch (err) {
+    console.error('[levee] fatal startup error:', err.message);
+    dialog.showErrorBox('Levee failed to start', err.message);
+    app.quit();
+    return;
+  }
   createMainWindow();
   setupTray();
   setupUpdater(() => mainWin);
 
   const preloadPath = path.join(__dirname, 'preload.js');
-  const ov = createOverlay(preloadPath);
+  const ov = createOverlay(preloadPath, getConfig().overlayContentProtection);
   if (getConfig().overlayEnabled !== true) ov.hide();
 
   globalShortcut.register('CommandOrControl+Shift+G', toggleOverlay);
@@ -249,6 +286,17 @@ ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);
 
 ipcMain.handle('set-login-item', (_e, enable) => {
   app.setLoginItemSettings({ openAtLogin: !!enable, openAsHidden: !!enable });
+  return true;
+});
+
+ipcMain.handle('get-content-protection', () => getConfig().overlayContentProtection !== false);
+
+ipcMain.handle('set-content-protection', (_e, enable) => {
+  const cfg = getConfig();
+  cfg.overlayContentProtection = !!enable;
+  saveConfig(cfg);
+  const ov = getOverlay();
+  if (ov && !ov.isDestroyed()) ov.setContentProtection(!!enable);
   return true;
 });
 

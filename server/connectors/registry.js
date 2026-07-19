@@ -18,8 +18,14 @@
  * label          {string}
  *   Human-readable display name shown in the UI.
  *
- * tier           {string}
- *   Always 'api' for Tier-2 connectors (live API pull).
+ * method         {'manual' | 'api' | 'local_token'}
+ *   How this connector's data reaches Levee, per the method ladder (prefer
+ *   higher): 'local_token' reuses a token another local app already stores
+ *   (claude_plan pattern — nothing new created/stored); 'api' is a live pull
+ *   using a scoped/root credential the user supplies; 'manual' means no safe
+ *   billing API exists — declared with no `fetch`/`hosts`/`endpoints`, purely
+ *   so the UI can say "no safe API exists — manual entry" instead of
+ *   implying a missing connector.
  *
  * authType       {string}
  *   Advisory label for the credential type (e.g. 'apiKey', 'awsKeyPair', 'digest',
@@ -64,8 +70,10 @@
  *   testConnection() makes; template-interpolated path segments (an account
  *   SID, an org id) are part of the regex, not literal strings.
  *   e.g. [{ method: 'POST', path: /^\/$/ }] for a POST-to-root JSON API.
- *   Connectors without `endpoints` fall back to host-only enforcement —
- *   every connector in this registry declares them (a test enforces this).
+ *   Connectors without `endpoints` fall back to host-only enforcement — every
+ *   connector with method 'api' or 'local_token' declares them (a test
+ *   enforces this); a 'manual' connector has no fetch path at all, so it's
+ *   exempt.
  *
  * syncIntervalHours {number}  (optional; default 6)
  *   How often syncEnabledConnectors() (server/cron/snapshot.js) actually calls
@@ -111,7 +119,7 @@ const registry = new Map();
 /**
  * Register a connector. Each connector module calls this once at load time.
  * @param {string} key
- * @param {{ label, tier, authType, secretAccounts, hosts, fetch }} def
+ * @param {{ label, method, authType, secretAccounts, hosts, fetch }} def
  */
 function register(key, def) {
   if (registry.has(key)) {

@@ -4,7 +4,8 @@ const { Router } = require('express');
 const db = require('../db/database');
 const { get: getConnectorDef } = require('../connectors/registry');
 const { getSecret } = require('../secrets');
-const { CATEGORY, COST_MODEL, VALUE_TYPE, CONNECTOR_TYPE, BILLING_PERIOD } = require('../middleware/validate');
+const { CATEGORY, COST_MODEL, VALUE_TYPE, CONNECTOR_TYPE, BILLING_PERIOD, isValidCurrency } = require('../middleware/validate');
+const { encryptExport, decryptExport, isEncryptedExport } = require('../backupCrypto');
 
 const router = Router();
 
@@ -16,18 +17,17 @@ const EXPORT_VERSION = 1;
 // misconfigured connector can never leak a credential into an export file.
 const FORBIDDEN_KEY_RE = /secret|key|token|password|credential/i;
 
-// GET /api/backup/export
-// Returns a secrets-free JSON snapshot of all user data.
-router.get('/export', (req, res) => {
+// Shared by the plain (GET) and encrypted (POST) export routes.
+function buildExportPayload() {
   const services = db.prepare(`
     WITH svc AS (
       SELECT id, name, provider, category, cost_model, monthly_cost,
-             budget_cap, billing_day, billing_period, billing_month, icon, active,
+             budget_cap, currency, billing_day, billing_period, billing_month, icon, active,
              provider_key, plan_key, connector_type, auto_available
       FROM   services
     )
     SELECT id, name, provider, category, cost_model, monthly_cost,
-           budget_cap, billing_day, billing_period, billing_month, icon, active,
+           budget_cap, currency, billing_day, billing_period, billing_month, icon, active,
            provider_key, plan_key, connector_type, auto_available
     FROM   svc
     ORDER  BY category, name
@@ -89,7 +89,7 @@ router.get('/export', (req, res) => {
     return { service: name, provider, provider_key, enabled: !!enabled, config: safeConfig };
   });
 
-  res.json({
+  return {
     version: EXPORT_VERSION,
     exported_at: new Date().toISOString(),
     services: servicesWithMetrics,
@@ -97,13 +97,44 @@ router.get('/export', (req, res) => {
     widget_slots: widgetSlots,
     monthly_snapshots: monthlySnapshots,
     app_settings: appSettings,
-  });
+  };
+}
+
+// GET /api/backup/export
+// Returns a secrets-free JSON snapshot of all user data.
+router.get('/export', (req, res) => {
+  res.json(buildExportPayload());
+});
+
+// POST /api/backup/export  { passphrase }
+// Opt-in encrypted export — passphrase travels in the body, never a query
+// string (query strings end up in server logs/history). scrypt+AES-256-GCM;
+// plain export (GET, above) remains the default.
+router.post('/export', (req, res) => {
+  const { passphrase } = req.body ?? {};
+  if (typeof passphrase !== 'string' || passphrase.length === 0) {
+    return res.status(400).json({ error: 'passphrase is required' });
+  }
+  const plaintext = JSON.stringify(buildExportPayload());
+  res.json(encryptExport(passphrase, plaintext));
 });
 
 // POST /api/backup/import
 // Validates shape then upserts all data. Services matched by name+provider.
 router.post('/import', async (req, res) => {
-  const payload = req.body;
+  let payload = req.body;
+
+  if (isEncryptedExport(payload)) {
+    const { passphrase } = payload;
+    if (typeof passphrase !== 'string' || passphrase.length === 0) {
+      return res.status(400).json({ error: 'passphrase is required to decrypt this backup' });
+    }
+    try {
+      payload = JSON.parse(decryptExport(passphrase, payload));
+    } catch {
+      return res.status(400).json({ error: 'Wrong passphrase or corrupted backup file' });
+    }
+  }
 
   if (!payload || payload.version !== EXPORT_VERSION) {
     return res.status(400).json({ error: 'Invalid or unsupported backup version' });
@@ -131,6 +162,9 @@ router.post('/import', async (req, res) => {
     if (svc.billing_period !== undefined && !BILLING_PERIOD.has(svc.billing_period)) {
       return res.status(400).json({ error: `Invalid billing_period: ${svc.billing_period}` });
     }
+    if (svc.currency !== undefined && !isValidCurrency(svc.currency)) {
+      return res.status(400).json({ error: `Invalid currency: ${svc.currency}` });
+    }
     for (const m of svc.metrics ?? []) {
       for (const f of REQUIRED_MET) {
         if (!m[f]) return res.status(400).json({ error: `Metric missing field: ${f}` });
@@ -151,7 +185,7 @@ router.post('/import', async (req, res) => {
 
   const patchSvc = db.prepare(`
     UPDATE services
-    SET category = ?, cost_model = ?, monthly_cost = ?, budget_cap = ?,
+    SET category = ?, cost_model = ?, monthly_cost = ?, budget_cap = ?, currency = ?,
         billing_day = ?, billing_period = ?, billing_month = ?, icon = ?, active = ?,
         provider_key = ?, plan_key = ?, connector_type = ?, auto_available = ?
     WHERE id = ?
@@ -211,7 +245,7 @@ router.post('/import', async (req, res) => {
 
       if (existing) {
         patchSvc.run(svc.category, svc.cost_model, svc.monthly_cost ?? null,
-                     svc.budget_cap ?? null, svc.billing_day ?? null,
+                     svc.budget_cap ?? null, svc.currency ?? 'USD', svc.billing_day ?? null,
                      svc.billing_period ?? 'monthly', svc.billing_month ?? null,
                      svc.icon ?? null, svc.active ?? 1,
                      svc.provider_key ?? null, svc.plan_key ?? null,
@@ -220,10 +254,10 @@ router.post('/import', async (req, res) => {
         svcId = existing.id;
       } else {
         const r = db.prepare(`
-          INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, billing_period, billing_month, icon, active, provider_key, plan_key, connector_type, auto_available)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, currency, billing_day, billing_period, billing_month, icon, active, provider_key, plan_key, connector_type, auto_available)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(svc.name, svc.provider, svc.category, svc.cost_model,
-               svc.monthly_cost ?? null, svc.budget_cap ?? null,
+               svc.monthly_cost ?? null, svc.budget_cap ?? null, svc.currency ?? 'USD',
                svc.billing_day ?? null, svc.billing_period ?? 'monthly', svc.billing_month ?? null,
                svc.icon ?? null, svc.active ?? 1,
                svc.provider_key ?? null, svc.plan_key ?? null,

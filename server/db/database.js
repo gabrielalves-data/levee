@@ -53,6 +53,7 @@ const serviceMigrations = [
   ['provider_key', 'ALTER TABLE services ADD COLUMN provider_key TEXT'],
   ["billing_period", "ALTER TABLE services ADD COLUMN billing_period TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_period IN ('monthly','quarterly','yearly'))"],
   ['billing_month', 'ALTER TABLE services ADD COLUMN billing_month INTEGER CHECK (billing_month IS NULL OR (billing_month BETWEEN 1 AND 12))'],
+  ['currency', "ALTER TABLE services ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'"],
 ];
 const addedAutoAvailable = !serviceColumns.has('auto_available');
 const addedProviderKey = !serviceColumns.has('provider_key');

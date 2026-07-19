@@ -72,7 +72,7 @@ function mapInvoiceResponse(body) {
 
 const connector = {
   label:          'MongoDB Atlas',
-  tier:           'api',
+  method:         'api',
   authType:       'digest',
   secretAccounts: ['publicKey', 'privateKey'],
   hosts:          HOSTS,

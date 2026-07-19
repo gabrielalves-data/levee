@@ -34,7 +34,7 @@ function mapCreditsResponse(body) {
 
 const connector = {
   label:          'OpenRouter',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

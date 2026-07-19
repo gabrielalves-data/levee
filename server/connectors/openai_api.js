@@ -77,7 +77,7 @@ function mapUsageReport(buckets) {
 
 const connector = {
   label:          'OpenAI API',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

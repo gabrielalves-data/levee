@@ -5,6 +5,7 @@ import { useSnapshots } from '../hooks/useSnapshots'
 import { useUpcomingResets } from '../hooks/useMetrics'
 import { computePace } from '../utils/pace'
 import { amortizedMonthly } from '../utils/billing'
+import { groupTotalsByCurrency, formatCurrency } from '../utils/currency'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -32,7 +33,7 @@ function StatCard({ label, value }) {
   )
 }
 
-function PaceCard({ pace, totalSpend, totalBudget }) {
+function PaceCard({ pace, totalSpend, totalBudget, currency }) {
   if (pace === null) {
     return (
       <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -50,7 +51,7 @@ function PaceCard({ pace, totalSpend, totalBudget }) {
         {cfg.label}
       </span>
       <p className="text-xs text-slate-500 mt-2">
-        ${totalSpend.toFixed(2)} / ${totalBudget.toFixed(2)} budget
+        {formatCurrency(totalSpend, currency)} / {formatCurrency(totalBudget, currency)} budget
       </p>
     </div>
   )
@@ -64,9 +65,16 @@ export default function Overview() {
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Loading…</div>
   if (isError)   return <div className="p-6 text-red-400 text-sm">Failed to load services.</div>
 
-  const total       = services.reduce((sum, s) => sum + amortizedMonthly(s), 0)
-  const budgetTotal = services.reduce((sum, s) => sum + (s.budget_cap ?? 0), 0)
-  const pace        = computePace(total, budgetTotal)
+  // Never sum mixed currencies into one number — group per currency; a single
+  // grand total (and the pace card, which needs one number to compare against
+  // a budget) is only meaningful when every active service shares a currency.
+  const currencyTotals = groupTotalsByCurrency(services)
+  const isSingleCurrency = currencyTotals.length <= 1
+  const primary = currencyTotals[0] ?? { currency: 'USD', total: 0 }
+  const budgetTotal = services
+    .filter(s => (s.currency || 'USD') === primary.currency)
+    .reduce((sum, s) => sum + (s.budget_cap ?? 0), 0)
+  const pace = isSingleCurrency ? computePace(primary.total, budgetTotal) : null
 
   const trendData = snapshots.map(s => ({
     label: MONTH_ABBR[s.month - 1],
@@ -82,9 +90,20 @@ export default function Overview() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Total this month" value={`$${total.toFixed(2)}`} />
+        {isSingleCurrency ? (
+          <StatCard label="Total this month" value={formatCurrency(primary.total, primary.currency)} />
+        ) : (
+          <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+            <p className="text-xs text-slate-400 mb-1.5">Total this month</p>
+            <div className="space-y-0.5">
+              {currencyTotals.map(({ currency, total: t }) => (
+                <p key={currency} className="text-lg font-bold text-white">{formatCurrency(t, currency)}</p>
+              ))}
+            </div>
+          </div>
+        )}
         <StatCard label="Active services"  value={services.length} />
-        <PaceCard pace={pace} totalSpend={total} totalBudget={budgetTotal} />
+        <PaceCard pace={pace} totalSpend={primary.total} totalBudget={budgetTotal} currency={primary.currency} />
       </div>
 
       {resets.length > 0 && (
@@ -163,7 +182,7 @@ export default function Overview() {
                 </div>
                 <span className="text-sm text-slate-300">
                   {s.monthly_cost != null
-                    ? `$${s.monthly_cost.toFixed(2)}/mo`
+                    ? `${formatCurrency(s.monthly_cost, s.currency)}/mo`
                     : <span className="text-slate-600">—</span>}
                 </span>
               </div>

@@ -31,7 +31,7 @@ function mapBalanceResponse(body) {
 
 const connector = {
   label:          'DeepSeek',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

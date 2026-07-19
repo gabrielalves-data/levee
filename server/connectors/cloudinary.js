@@ -30,7 +30,7 @@ function mapUsageResponse(body) {
 
 const connector = {
   label:          'Cloudinary',
-  tier:           'api',
+  method:         'api',
   authType:       'basicAuth',
   secretAccounts: ['apiKey', 'apiSecret'],
   hosts:          HOSTS,

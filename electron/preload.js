@@ -13,6 +13,8 @@ try {
     setLoginItem:     (enable) => ipcRenderer.invoke('set-login-item', enable),
     getOverlayEnabled: () => ipcRenderer.invoke('get-overlay-enabled'),
     setOverlayEnabled: (enable) => ipcRenderer.invoke('set-overlay-enabled', enable),
+    getContentProtection: () => ipcRenderer.invoke('get-content-protection'),
+    setContentProtection: (enable) => ipcRenderer.invoke('set-content-protection', enable),
     overlayExpand:       (w, h)         => ipcRenderer.invoke('overlay-expand', w, h),
     overlayRefit:        (w, h, anchor) => ipcRenderer.send('overlay-refit', w, h, anchor),
     overlayCollapse:     (anchor)       => ipcRenderer.send('overlay-collapse', anchor),

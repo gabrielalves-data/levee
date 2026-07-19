@@ -28,6 +28,8 @@ const COST_MODELS = [
   { value: 'hybrid', label: 'Hybrid' },
 ]
 
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'BRL']
+
 const VALUE_TYPES = [
   { value: 'currency', label: 'Currency ($)' },
   { value: 'number',   label: 'Number' },
@@ -52,6 +54,7 @@ function CustomServiceForm({ onDone }) {
   const [provider, setProvider]     = useState('')
   const [category, setCategory]     = useState('custom')
   const [costModel, setCostModel]   = useState('flat')
+  const [currency, setCurrency]     = useState('USD')
   const [monthlyCost, setMonthlyCost] = useState('')
   const [budgetCap, setBudgetCap]   = useState('')
   const [metrics, setMetrics]       = useState([emptyMetric()])
@@ -95,6 +98,7 @@ function CustomServiceForm({ onDone }) {
         provider:     provider.trim(),
         category,
         cost_model:   costModel,
+        currency,
         monthly_cost: monthlyCost ? parseFloat(monthlyCost) : null,
         budget_cap:   budgetCap   ? parseFloat(budgetCap)   : null,
       })
@@ -149,13 +153,19 @@ function CustomServiceForm({ onDone }) {
           </select>
         </label>
         <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Monthly Cost ($)</span>
+          <span className="block text-xs text-slate-400">Currency</span>
+          <select value={currency} onChange={e => setCurrency(e.target.value)} className={INPUT_CLS}>
+            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs text-slate-400">Monthly Cost</span>
           <input type="number" step="0.01" min="0" value={monthlyCost}
             onChange={e => setMonthlyCost(e.target.value)}
             className={INPUT_CLS} placeholder="0.00" />
         </label>
         <label className="space-y-1">
-          <span className="block text-xs text-slate-400">Budget Cap ($)</span>
+          <span className="block text-xs text-slate-400">Budget Cap</span>
           <input type="number" step="0.01" min="0" value={budgetCap}
             onChange={e => setBudgetCap(e.target.value)}
             className={INPUT_CLS} placeholder="0.00" />
@@ -269,11 +279,17 @@ function ServiceRow({ service }) {
 
 function DataManagement() {
   const [importStatus, setImportStatus] = useState(null)
+  const [encrypt, setEncrypt] = useState(false)
+  const [passphrase, setPassphrase] = useState('')
+  const [importPassphrase, setImportPassphrase] = useState('')
+  const [pendingImportFile, setPendingImportFile] = useState(null)
   const fileRef = useRef(null)
   const qc = useQueryClient()
 
   async function handleExport() {
-    const data = await apiFetch('/api/backup/export')
+    const data = encrypt
+      ? await apiFetch('/api/backup/export', { method: 'POST', body: JSON.stringify({ passphrase }) })
+      : await apiFetch('/api/backup/export')
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url  = URL.createObjectURL(blob)
     const a    = Object.assign(document.createElement('a'), {
@@ -284,14 +300,10 @@ function DataManagement() {
     URL.revokeObjectURL(url)
   }
 
-  async function handleImport(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function runImport(payload) {
     setImportStatus(null)
     try {
-      const text    = await file.text()
-      const payload = JSON.parse(text)
-      const result  = await apiFetch('/api/backup/import', {
+      const result = await apiFetch('/api/backup/import', {
         method: 'POST',
         body:   JSON.stringify(payload),
       })
@@ -299,17 +311,41 @@ function DataManagement() {
       qc.invalidateQueries()
     } catch (err) {
       setImportStatus({ ok: false, msg: err.message })
+    }
+  }
+
+  async function handleImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text    = await file.text()
+      const payload = JSON.parse(text)
+      if (payload?.v === 1 && payload.salt && payload.iv && payload.tag && payload.data) {
+        setPendingImportFile(payload)
+      } else {
+        await runImport(payload)
+      }
+    } catch (err) {
+      setImportStatus({ ok: false, msg: err.message })
     } finally {
       e.target.value = ''
     }
   }
 
+  async function confirmEncryptedImport() {
+    const payload = { ...pendingImportFile, passphrase: importPassphrase }
+    setPendingImportFile(null)
+    setImportPassphrase('')
+    await runImport(payload)
+  }
+
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center flex-wrap">
         <button
           onClick={handleExport}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+          disabled={encrypt && !passphrase}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white rounded-lg transition-colors">
           <Download size={13} /> Export backup
         </button>
         <button
@@ -319,6 +355,39 @@ function DataManagement() {
         </button>
         <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
       </div>
+      <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+        <input type="checkbox" checked={encrypt} onChange={e => setEncrypt(e.target.checked)} className="accent-indigo-500" />
+        Encrypt this export
+      </label>
+      {encrypt && (
+        <input
+          type="password"
+          value={passphrase}
+          onChange={e => setPassphrase(e.target.value)}
+          placeholder="Export passphrase"
+          className="w-full max-w-xs bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+        />
+      )}
+      {pendingImportFile && (
+        <div className="flex items-center gap-2 bg-slate-900/60 rounded-lg p-2.5">
+          <input
+            type="password"
+            value={importPassphrase}
+            onChange={e => setImportPassphrase(e.target.value)}
+            placeholder="Backup passphrase"
+            autoFocus
+            className="flex-1 bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+          />
+          <button onClick={confirmEncryptedImport} disabled={!importPassphrase}
+            className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg transition-colors">
+            Decrypt & Import
+          </button>
+          <button onClick={() => { setPendingImportFile(null); setImportPassphrase('') }}
+            className="px-2 py-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+            Cancel
+          </button>
+        </div>
+      )}
       {importStatus && (
         <p className={`text-xs ${importStatus.ok ? 'text-emerald-400' : 'text-red-400'}`}>
           {importStatus.msg}
@@ -385,10 +454,14 @@ function EncryptionToggle() {
 
 function OverlaySection() {
   const [enabled, setEnabled] = useState(true)
+  const [contentProtected, setContentProtected] = useState(true)
 
   useEffect(() => {
     window.levee?.getOverlayEnabled?.().then(v => {
       if (v !== undefined) setEnabled(!!v)
+    })
+    window.levee?.getContentProtection?.().then(v => {
+      if (v !== undefined) setContentProtected(!!v)
     })
   }, [])
 
@@ -396,6 +469,12 @@ function OverlaySection() {
     const next = !enabled
     setEnabled(next)
     window.levee?.setOverlayEnabled?.(next)
+  }
+
+  function toggleContentProtection() {
+    const next = !contentProtected
+    setContentProtected(next)
+    window.levee?.setContentProtection?.(next)
   }
 
   return (
@@ -412,6 +491,19 @@ function OverlaySection() {
           title={enabled ? 'Hide overlay' : 'Show overlay'}
         >
           {enabled ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+        </button>
+      </div>
+      <div className="flex items-center justify-between bg-slate-800/60 rounded-lg px-3 py-2.5 border border-slate-700/50">
+        <div>
+          <p className="text-sm text-white">Hide from Screen Shares</p>
+          <p className="text-xs text-slate-500 mt-0.5">Keep billing numbers out of recordings/screen shares (best-effort on Linux)</p>
+        </div>
+        <button
+          onClick={toggleContentProtection}
+          className={`transition-colors ${contentProtected ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-600 hover:text-slate-400'}`}
+          title={contentProtected ? 'Disable content protection' : 'Enable content protection'}
+        >
+          {contentProtected ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
         </button>
       </div>
       {enabled && (

@@ -28,7 +28,7 @@ function mapBillingResponse(body) {
 
 const connector = {
   label:          'PlanetScale',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

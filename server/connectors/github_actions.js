@@ -42,7 +42,7 @@ function mapActionsResponse(body) {
 
 const connector = {
   label:          'GitHub Actions',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

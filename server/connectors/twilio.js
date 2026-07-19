@@ -45,7 +45,7 @@ function mapBalanceResponse(body) {
 
 const connector = {
   label:          'Twilio',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKeySid', 'apiKeySecret'],
   hosts:          HOSTS,

@@ -31,7 +31,7 @@ function mapSubscriptionResponse(body) {
 
 const connector = {
   label:          'ElevenLabs',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

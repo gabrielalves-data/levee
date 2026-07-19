@@ -27,7 +27,7 @@ function mapInvoiceResponse(body) {
 
 const connector = {
   label:          'Fastly',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

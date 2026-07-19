@@ -5,6 +5,7 @@ import { useSnapshots } from '../../hooks/useSnapshots'
 import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
 import { useAllowOutbound, useUpsertConnector, useSyncConnector, useTestConnector, useAuditConnector, useDeleteConnector } from '../../hooks/useConnectors'
 import { useProviders } from '../../hooks/useProviders'
+import { formatCurrency } from '../../utils/currency'
 
 const CATEGORY_STYLES = {
   cloud:    'bg-blue-500/20 text-blue-300',
@@ -39,11 +40,14 @@ function parseDateValue({ value_text, value_num }) {
   return d && !isNaN(d.getTime()) ? d : null
 }
 
-function formatValue(metric) {
+function formatValue(metric, serviceCurrency) {
   const { value_type, value_num, value_text, unit } = metric
   if (value_num == null && !value_text) return '—'
   switch (value_type) {
-    case 'currency': return `$${value_num.toFixed(2)}`
+    // A connector-sourced metric's own `unit` (e.g. claude_plan's extra-usage
+    // credits) is a real ISO code when present; otherwise fall back to the
+    // service's billing currency.
+    case 'currency': return formatCurrency(value_num, unit || serviceCurrency)
     case 'percent':  return `${value_num.toFixed(1)}%`
     case 'number':   return `${value_num.toLocaleString()}${unit ? ' ' + unit : ''}`
     case 'date': {
@@ -127,7 +131,7 @@ function MetricRow({ metric, service, prevBill, readOnly }) {
         <div className="flex items-center gap-1 shrink-0">
           {!editing && momDelta != null && (
             <span className={`text-xs ${momDelta > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-              {momDelta > 0 ? '↑' : '↓'}${Math.abs(momDelta).toFixed(2)}
+              {momDelta > 0 ? '↑' : '↓'}{formatCurrency(Math.abs(momDelta), service.currency)}
             </span>
           )}
           {!editing && (
@@ -135,7 +139,7 @@ function MetricRow({ metric, service, prevBill, readOnly }) {
               className={`text-xs font-medium ${isEmpty ? 'text-slate-600' : 'text-slate-200'}`}
               title={metric.value_type === 'date' ? (parseDateValue(metric)?.toLocaleString() ?? undefined) : undefined}
             >
-              {formatValue(metric)}
+              {formatValue(metric, service.currency)}
             </span>
           )}
           {!readOnly && (
@@ -185,8 +189,8 @@ function MetricRow({ metric, service, prevBill, readOnly }) {
           <UsageBar ratio={ratio} />
           {hasBudgetBar && (
             <div className="flex justify-between text-xs text-slate-600 mt-0.5">
-              <span>${metric.value_num.toFixed(0)}</span>
-              <span>${Number(service.budget_cap).toFixed(0)} cap</span>
+              <span>{formatCurrency(metric.value_num, service.currency)}</span>
+              <span>{formatCurrency(Number(service.budget_cap), service.currency)} cap</span>
             </div>
           )}
           {hasUsageBar && ratio > 0.8 && (

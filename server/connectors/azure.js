@@ -42,7 +42,7 @@ function mapQueryResponse(body) {
 
 const connector = {
   label:          'Azure',
-  tier:           'api',
+  method:         'api',
   authType:       'oauthClientCredentials',
   secretAccounts: ['clientSecret'],
   hosts:          HOSTS,

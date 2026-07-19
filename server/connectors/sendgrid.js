@@ -30,7 +30,7 @@ function mapCreditsResponse(body) {
 
 const connector = {
   label:          'SendGrid',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

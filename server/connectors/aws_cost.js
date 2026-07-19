@@ -65,7 +65,7 @@ function mapResponse(data) {
 
 const connector = {
   label:          'AWS',
-  tier:           'api',
+  method:         'api',
   authType:       'awsKeyPair',
   secretAccounts: ['accessKeyId', 'secretAccessKey'],
   hosts:          HOSTS,

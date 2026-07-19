@@ -3,13 +3,13 @@
 const { Router } = require('express');
 const db = require('../db/database');
 const { getProvider } = require('../providers');
-const { CATEGORY, COST_MODEL, BILLING_PERIOD } = require('../middleware/validate');
+const { CATEGORY, COST_MODEL, BILLING_PERIOD, isValidCurrency } = require('../middleware/validate');
 
 const router = Router();
 
 const ALLOWED_FIELDS = new Set([
   'name', 'provider', 'category', 'cost_model',
-  'monthly_cost', 'budget_cap', 'billing_day', 'billing_period', 'billing_month', 'icon', 'active',
+  'monthly_cost', 'budget_cap', 'currency', 'billing_day', 'billing_period', 'billing_month', 'icon', 'active',
 ]);
 
 // GET /api/services          → active only
@@ -18,14 +18,14 @@ router.get('/', (req, res) => {
   const all = req.query.all === '1';
   const rows = db.prepare(`
     WITH svc AS (
-      SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
+      SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap, currency,
              billing_day, billing_period, billing_month, icon, is_seed, active, auto_available, connector_type,
              provider_key, plan_key,
              last_sync_at, sync_status, sync_error, created_at
       FROM   services
       WHERE  (? = 1 OR active = 1)
     )
-    SELECT svc.id, svc.name, svc.provider, svc.category, svc.cost_model, svc.monthly_cost, svc.budget_cap,
+    SELECT svc.id, svc.name, svc.provider, svc.category, svc.cost_model, svc.monthly_cost, svc.budget_cap, svc.currency,
            svc.billing_day, svc.billing_period, svc.billing_month, svc.icon, svc.is_seed, svc.active, svc.auto_available, svc.connector_type,
            svc.provider_key, svc.plan_key,
            svc.last_sync_at, svc.sync_status, svc.sync_error, svc.created_at,
@@ -41,14 +41,14 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const row = db.prepare(`
     WITH svc AS (
-      SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap,
+      SELECT id, name, provider, category, cost_model, monthly_cost, budget_cap, currency,
              billing_day, billing_period, billing_month, icon, is_seed, active, auto_available, connector_type,
              provider_key, plan_key,
              last_sync_at, sync_status, sync_error, created_at
       FROM   services
       WHERE  id = ?
     )
-    SELECT svc.id, svc.name, svc.provider, svc.category, svc.cost_model, svc.monthly_cost, svc.budget_cap,
+    SELECT svc.id, svc.name, svc.provider, svc.category, svc.cost_model, svc.monthly_cost, svc.budget_cap, svc.currency,
            svc.billing_day, svc.billing_period, svc.billing_month, svc.icon, svc.is_seed, svc.active, svc.auto_available, svc.connector_type,
            svc.provider_key, svc.plan_key,
            svc.last_sync_at, svc.sync_status, svc.sync_error, svc.created_at,
@@ -62,7 +62,7 @@ router.get('/:id', (req, res) => {
 
 // POST /api/services
 router.post('/', (req, res) => {
-  const { name, provider, category, cost_model, monthly_cost, budget_cap, billing_day,
+  const { name, provider, category, cost_model, monthly_cost, budget_cap, currency, billing_day,
           billing_period, billing_month, icon, provider_key } = req.body;
 
   // Provider-first path: a known provider_key binds the service to the directory,
@@ -90,11 +90,14 @@ router.post('/', (req, res) => {
   if (billing_period !== undefined && !BILLING_PERIOD.has(billing_period)) {
     return res.status(400).json({ error: `Invalid billing_period: ${billing_period}` });
   }
+  if (currency !== undefined && !isValidCurrency(currency)) {
+    return res.status(400).json({ error: `Invalid currency: ${currency}` });
+  }
   const result = db.prepare(`
-    INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, billing_day, billing_period, billing_month, icon, provider_key, auto_available)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO services (name, provider, category, cost_model, monthly_cost, budget_cap, currency, billing_day, billing_period, billing_month, icon, provider_key, auto_available)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(name, provider, resolvedCategory, cost_model ?? 'flat',
-         monthly_cost ?? null, budget_cap ?? null, billing_day ?? null,
+         monthly_cost ?? null, budget_cap ?? null, currency ?? 'USD', billing_day ?? null,
          billing_period ?? 'monthly', billing_month ?? null, icon ?? null,
          provider_key ?? null, autoAvailable);
   res.status(201).json({ id: result.lastInsertRowid });
@@ -113,6 +116,9 @@ router.patch('/:id', (req, res) => {
   }
   if (req.body.billing_period !== undefined && !BILLING_PERIOD.has(req.body.billing_period)) {
     return res.status(400).json({ error: `Invalid billing_period: ${req.body.billing_period}` });
+  }
+  if (req.body.currency !== undefined && !isValidCurrency(req.body.currency)) {
+    return res.status(400).json({ error: `Invalid currency: ${req.body.currency}` });
   }
 
   // Column names come from the whitelist, never from raw user input — safe to interpolate.

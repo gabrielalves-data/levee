@@ -65,6 +65,14 @@ function startListening() {
     if (process.parentPort) process.parentPort.postMessage({ type: 'ready', port });
     startCrons();
   });
+  // Without this, an unhandled 'error' event (e.g. EADDRINUSE on the dev fixed
+  // port) throws and crashes with a raw stack trace rather than a clean exit —
+  // and the parent (electron/main.js) never learns the server failed to start.
+  server.on('error', (err) => {
+    console.error('[levee] server failed to start:', err.message);
+    process.exitCode = 1;
+    process.exit(1);
+  });
 }
 
 if (process.parentPort) {

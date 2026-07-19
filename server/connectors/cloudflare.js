@@ -63,7 +63,7 @@ function mapBillingResponse(body, since) {
 
 const connector = {
   label:          'Cloudflare',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

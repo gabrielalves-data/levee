@@ -55,7 +55,7 @@ function mapSubscriptionResponse(body) {
 
 const connector = {
   label:          'Sentry',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

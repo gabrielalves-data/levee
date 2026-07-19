@@ -28,7 +28,7 @@ function mapAccountResponse(body) {
 
 const connector = {
   label:          'Linode',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

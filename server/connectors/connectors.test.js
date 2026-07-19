@@ -2543,11 +2543,13 @@ describe('connectorFetch — endpoint allowlist', () => {
 });
 
 describe('connector endpoint declarations (§6.4)', () => {
-  it('every registered connector declares a non-empty endpoints array', () => {
+  it('every registered connector with a live fetch path (method !== manual) declares a non-empty endpoints array', () => {
     // Uses the raw registry, not list() — list() strips `endpoints` before
     // sending connector metadata to the frontend (RegExp doesn't serialize).
+    // A 'manual' connector has no fetch path at all, so it's exempt (§6.2).
     const { registry: rawRegistry } = require('./registry');
     for (const def of rawRegistry.values()) {
+      if (def.method === 'manual') continue;
       assert.ok(
         Array.isArray(def.endpoints) && def.endpoints.length > 0,
         `${def.provider_key}: must declare endpoints (see server/connectors/registry.js contract)`
@@ -2557,5 +2559,50 @@ describe('connector endpoint declarations (§6.4)', () => {
         assert.ok(e.path instanceof RegExp, `${def.provider_key}: endpoint path must be a RegExp`);
       }
     }
+  });
+});
+
+// ─── §9 item 6 — missing keychain secret (H3) ─────────────────────────────────
+
+const { resolveConnectorSecrets, _setGetSecretForTest } = require('./sync');
+
+describe('resolveConnectorSecrets — missing keychain secret (H3)', () => {
+  afterEach(() => { _setGetSecretForTest(async () => null); });
+
+  it('throws a clear "missing credential" error and never calls fetch when a secret is absent', async () => {
+    _setGetSecretForTest(async () => null); // simulates every keychain lookup missing
+    let fetchCalled = false;
+    const fakeConnector = {
+      secretAccounts: ['apiKey'],
+      async fetch() { fetchCalled = true; return []; },
+    };
+    await assert.rejects(
+      () => resolveConnectorSecrets(999, fakeConnector, {}),
+      /missing credential.*apiKey/i
+    );
+    assert.equal(fetchCalled, false, 'fetch must never run when a required secret is missing');
+  });
+
+  it('resolves normally when the secret is present', async () => {
+    _setGetSecretForTest(async (account) => (account.endsWith(':apiKey') ? 'the-secret' : null));
+    const fakeConnector = { secretAccounts: ['apiKey'] };
+    const secrets = await resolveConnectorSecrets(999, fakeConnector, {});
+    assert.equal(secrets.apiKey, 'the-secret');
+  });
+
+  it("defers to the connector's own resolveSecrets when declared, instead of throwing immediately", async () => {
+    _setGetSecretForTest(async () => null);
+    let resolveSecretsCalled = false;
+    const fakeConnector = {
+      secretAccounts: ['apiKey'],
+      async resolveSecrets({ secrets, missing }) {
+        resolveSecretsCalled = true;
+        assert.deepEqual(missing, ['apiKey']);
+        secrets.apiKey = 'fallback-value';
+      },
+    };
+    const secrets = await resolveConnectorSecrets(999, fakeConnector, {});
+    assert.equal(resolveSecretsCalled, true);
+    assert.equal(secrets.apiKey, 'fallback-value');
   });
 });

@@ -38,7 +38,7 @@ function mapEstimatedCost(body) {
 
 const connector = {
   label:          'Datadog',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKeyPair',
   secretAccounts: ['apiKey', 'appKey'],
   hosts:          HOSTS,

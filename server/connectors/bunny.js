@@ -28,7 +28,7 @@ function mapBillingResponse(body) {
 
 const connector = {
   label:          'Bunny.net',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

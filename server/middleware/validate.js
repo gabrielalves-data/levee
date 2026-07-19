@@ -13,6 +13,13 @@ const VALUE_TYPE      = new Set(['number', 'percent', 'currency', 'date', 'text'
 const CONNECTOR_TYPE = new Set(['manual', 'catalog', 'api']);
 const BILLING_PERIOD = new Set(['monthly', 'quarterly', 'yearly']);
 
+// ISO 4217 alpha-3 code, e.g. 'USD', 'EUR' — not a full ISO list, just the shape;
+// an unrecognized-but-well-formed code fails soft in display (Intl.NumberFormat).
+const CURRENCY_RE = /^[A-Z]{3}$/;
+function isValidCurrency(v) {
+  return CURRENCY_RE.test(v);
+}
+
 function isValidId(v) {
   return Number.isInteger(v);
 }
@@ -28,5 +35,5 @@ function serviceExists(id) {
 
 module.exports = {
   CATEGORY, COST_MODEL, VALUE_TYPE, CONNECTOR_TYPE, BILLING_PERIOD,
-  isValidId, isValidSlotIndex, serviceExists,
+  isValidId, isValidSlotIndex, isValidCurrency, serviceExists,
 };

@@ -29,7 +29,7 @@ function mapBalanceResponse(body) {
 
 const connector = {
   label:          'DigitalOcean',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

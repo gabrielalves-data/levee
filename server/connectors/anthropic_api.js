@@ -78,7 +78,7 @@ function mapUsageReport(data) {
 
 const connector = {
   label:          'Anthropic API',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

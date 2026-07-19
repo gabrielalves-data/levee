@@ -43,7 +43,7 @@ function mapGraphQLResponse(data) {
 
 const connector = {
   label:          'Railway',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

@@ -38,7 +38,7 @@ function mapGraphQLResponse(data) {
 
 const connector = {
   label:          'Linear',
-  tier:           'api',
+  method:         'api',
   authType:       'apiKey',
   secretAccounts: ['apiKey'],
   hosts:          HOSTS,

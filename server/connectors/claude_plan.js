@@ -169,7 +169,7 @@ function mapUsageResponse(body) {
 
 const connector = {
   label:          'Claude Plan Usage (local OAuth)',
-  tier:           'api',
+  method:         'local_token',
   authType:       'localOAuth',
   secretAccounts: [],            // no keychain entries owned by Levee
   hosts:          HOSTS,

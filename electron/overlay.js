@@ -85,7 +85,7 @@ function pillBoundsFor(panelBounds, anchor) {
   return clampToWorkArea({ x, y, width: PILL, height: PILL });
 }
 
-function createOverlay(preloadPath) {
+function createOverlay(preloadPath, contentProtection) {
   const { width } = screen.getPrimaryDisplay().workAreaSize;
   const saved = getSavedBounds();
   // The overlay restores collapsed (PILL-sized). Clamp the restored origin so a
@@ -109,10 +109,14 @@ function createOverlay(preloadPath) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      devTools: !app.isPackaged,
     },
   });
 
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  // Billing numbers must not leak into screen shares/recordings. Default on;
+  // user-toggleable via Settings (best-effort on Linux, per Electron docs).
+  overlayWin.setContentProtection(contentProtection !== false);
 
   // NOTE: CSP is set by the single onHeadersReceived handler in main.js, which
   // runs on this same (default) session. Registering another listener here

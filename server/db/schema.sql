@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS services (
   cost_model   TEXT    NOT NULL DEFAULT 'flat' CHECK (cost_model IN ('flat','usage','hybrid')),
   monthly_cost REAL,
   budget_cap   REAL,
+  currency     TEXT    NOT NULL DEFAULT 'USD',
   billing_day  INTEGER,
   billing_period TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_period IN ('monthly','quarterly','yearly')),
   -- Calendar month (1-12) the real charge lands in; only meaningful when
