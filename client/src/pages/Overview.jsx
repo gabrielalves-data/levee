@@ -6,6 +6,7 @@ import { useUpcomingResets } from '../hooks/useMetrics'
 import { computePace } from '../utils/pace'
 import { amortizedMonthly } from '../utils/billing'
 import { groupTotalsByCurrency, formatCurrency } from '../utils/currency'
+import { useRelativeTime } from '../utils/time'
 import SyncAllButton from '../components/SyncAllButton'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -63,6 +64,13 @@ export default function Overview() {
   const { data: snapshots = [] }                    = useSnapshots(6)
   const { data: resets = [] }                       = useUpcomingResets()
 
+  // ISO timestamps sort lexicographically, so a plain string max finds the latest.
+  const lastSyncAt = services.reduce(
+    (latest, s) => (s.last_sync_at && (!latest || s.last_sync_at > latest) ? s.last_sync_at : latest),
+    null,
+  )
+  const lastSyncLabel = useRelativeTime(lastSyncAt)
+
   if (isLoading) return <div className="p-6 text-slate-400 text-sm">Loading…</div>
   if (isError)   return <div className="p-6 text-red-400 text-sm">Failed to load services.</div>
 
@@ -88,6 +96,9 @@ export default function Overview() {
         <h2 className="text-xl font-semibold text-slate-100">
           <span className="text-emerald-400 glow">&gt;</span> overview
         </h2>
+        {lastSyncLabel && (
+          <p className="text-xs text-slate-500">Synced {lastSyncLabel}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-4">

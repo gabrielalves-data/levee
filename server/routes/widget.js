@@ -18,6 +18,7 @@ router.get('/', (req, res) => {
         ws.label_override,
         ws.updated_at,
         s.name        AS service_name,
+        s.last_sync_at,
         sm.label      AS metric_label,
         sm.value_type,
         sm.value_num,
@@ -29,7 +30,7 @@ router.get('/', (req, res) => {
                                    AND sm.metric_key = ws.metric_key
     )
     SELECT id, slot_index, service_id, metric_key, label_override, updated_at,
-           service_name, metric_label, value_type, value_num, value_text, unit
+           service_name, last_sync_at, metric_label, value_type, value_num, value_text, unit
     FROM   slot_data
     ORDER  BY slot_index
   `).all();

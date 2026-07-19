@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Minimize2 } from 'lucide-react'
 import { apiFetch } from './api'
+import { useRelativeTime } from './utils/time'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -136,6 +137,14 @@ function OverlayInner() {
   const filled = slots.filter(s => s.service_id)
   const panelW = WINDOW_W[Math.min(filled.length, 4)]
 
+  // ISO timestamps sort lexicographically, so a plain string max finds the latest
+  // sync among the services currently shown in the widget's slots.
+  const lastSyncAt = filled.reduce(
+    (latest, s) => (s.last_sync_at && (!latest || s.last_sync_at > latest) ? s.last_sync_at : latest),
+    null,
+  )
+  const lastSyncLabel = useRelativeTime(lastSyncAt)
+
   useEffect(() => {
     const cleanup = window.levee?.onWidgetUpdate?.(() => refetch())
     return () => cleanup?.()
@@ -265,6 +274,11 @@ function OverlayInner() {
             title="Click to minimize · drag to move"
             className="relative flex justify-center items-center h-4 mb-0.5 cursor-pointer active:cursor-grabbing group/grip select-none"
           >
+            {lastSyncLabel && (
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 text-[8px] text-emerald-400/35 group-hover/grip:text-emerald-300 transition-colors pointer-events-none whitespace-nowrap">
+                {lastSyncLabel}
+              </span>
+            )}
             <div className="w-7 h-0.5 rounded-full bg-emerald-400/25 group-hover/grip:bg-emerald-400/50 transition-colors pointer-events-none" />
             <Minimize2
               size={10}
