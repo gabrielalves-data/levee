@@ -105,6 +105,11 @@ async function syncService(serviceId) {
     runUpsertMetrics(serviceId, metrics);
     updateSyncResult.run(now, 'ok', null, serviceId);
     resetFailures.run(serviceId);
+    // Tell the Electron main process new metrics landed, so it can nudge the
+    // overlay to refetch immediately instead of waiting for its 30s poll.
+    // Only present under Electron (see server/index.js); a bare `node
+    // server/index.js` dev run has no parent to notify.
+    if (process.parentPort) process.parentPort.postMessage({ type: 'sync-complete' });
     return { sync_status: 'ok', sync_error: null, last_sync_at: now };
   } catch (err) {
     const msg = err.message ?? String(err);

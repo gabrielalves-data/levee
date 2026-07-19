@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useServices } from '../../hooks/useServices'
 import ServiceCard from './ServiceCard'
+import SyncAllButton from '../SyncAllButton'
 
 const CATEGORY_LABELS = {
   cloud:    'Cloud',
@@ -25,9 +26,12 @@ export default function Services() {
 
   return (
     <div className="p-6 space-y-4">
-      <h2 className="text-xl font-semibold text-slate-100">
-        <span className="text-emerald-400 glow">&gt;</span> services
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-slate-100">
+          <span className="text-emerald-400 glow">&gt;</span> services
+        </h2>
+        <SyncAllButton />
+      </div>
 
       <div className="flex gap-2 flex-wrap">
         {['all', ...categories].map(cat => (

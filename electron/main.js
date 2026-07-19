@@ -119,6 +119,15 @@ async function startServer() {
   // `electron`'s safeStorage — it proxies every get/set/delete here, where
   // secretStore.js owns the ciphertext file and the actual encrypt/decrypt calls.
   serverProcess.on('message', (msg) => {
+    if (msg?.type === 'sync-complete') {
+      // New metrics landed from any sync path (cron tick, launch sync, focus
+      // sync-check, or a manual "Sync now") — reuse the same channel the
+      // renderer already uses after editing a widget slot, so the overlay
+      // refetches immediately instead of waiting for its 30s poll.
+      const ov = getOverlay();
+      if (ov && !ov.isDestroyed()) ov.webContents.send('widget-updated');
+      return;
+    }
     if (msg?.type !== 'secret-request') return;
     const reply = { type: 'secret-reply', requestId: msg.requestId };
     try {
@@ -219,6 +228,8 @@ function createMainWindow() {
     e.preventDefault();
     mainWin.hide();
   });
+
+  mainWin.on('focus', triggerFocusSync);
 }
 
 function setupTray() {
@@ -231,6 +242,27 @@ function setupTray() {
     { label: 'Quit', click: () => app.quit() },
   ]));
   tray.on('double-click', () => { mainWin?.show(); mainWin?.focus(); });
+}
+
+// Window focus (taskbar click, alt-tab, tray) re-runs the same due-check the
+// 6h/24h/30min cron ticks already use — so a connector that became due while
+// the app sat unfocused (or the machine was asleep through a scheduled tick)
+// catches up as soon as the user looks at it, instead of waiting for the next
+// tick. isDueForSync still gates each connector's own interval, so this never
+// syncs anything early — it only closes the gap between "became due" and
+// "next scheduled tick". Debounced so rapid refocusing doesn't re-run the
+// due-check (a settings + connectors read) more than once per 20min.
+const FOCUS_SYNC_GAP_MS = 20 * 60 * 1000;
+let lastFocusSyncAt = 0;
+
+function triggerFocusSync() {
+  const now = Date.now();
+  if (now - lastFocusSyncAt < FOCUS_SYNC_GAP_MS) return;
+  lastFocusSyncAt = now;
+  fetch(`http://127.0.0.1:${PORT}/api/connectors/sync-check`, {
+    method: 'POST',
+    headers: { 'x-levee-token': LAUNCH_TOKEN },
+  }).catch((err) => console.error('[levee] focus sync-check failed:', err.message));
 }
 
 function toggleOverlay() {

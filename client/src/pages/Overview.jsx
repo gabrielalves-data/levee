@@ -6,6 +6,7 @@ import { useUpcomingResets } from '../hooks/useMetrics'
 import { computePace } from '../utils/pace'
 import { amortizedMonthly } from '../utils/billing'
 import { groupTotalsByCurrency, formatCurrency } from '../utils/currency'
+import SyncAllButton from '../components/SyncAllButton'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -165,8 +166,9 @@ export default function Overview() {
       )}
 
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-700">
+        <div className="px-5 py-3 border-b border-slate-700 flex items-center justify-between">
           <h3 className="text-sm font-medium text-slate-300">Active Services</h3>
+          <SyncAllButton />
         </div>
         <div className="divide-y divide-slate-700/50">
           {services.length === 0 ? (

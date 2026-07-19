@@ -75,11 +75,16 @@ function takeSnapshot(year, month) {
   `).run(year, month, total, JSON.stringify(billedRows));
 }
 
-async function syncEnabledConnectors() {
+// force=true (the "Sync all" button) skips the isDueForSync gate entirely and
+// syncs every enabled connector regardless of cadence — the caller (the
+// sync-all route) is responsible for its own rate limiting, since forcing a
+// metered connector (e.g. AWS Cost Explorer @ $0.01/request) on demand has a
+// real cost the interval would otherwise cap.
+async function syncEnabledConnectors({ force = false } = {}) {
   const setting = db.prepare(
     `SELECT value FROM app_settings WHERE key = 'allow_outbound'`
   ).get();
-  if (setting?.value !== 'true') return;
+  if (setting?.value !== 'true') return { synced: 0, outboundDisabled: true };
 
   const rows = db.prepare(`
     WITH enabled_api AS (
@@ -93,12 +98,17 @@ async function syncEnabledConnectors() {
     SELECT service_id, provider_key, consecutive_failures, last_sync_at FROM enabled_api
   `).all();
 
+  let synced = 0;
   for (const { service_id, provider_key, consecutive_failures, last_sync_at } of rows) {
-    const intervalHours = getConnector(provider_key)?.syncIntervalHours ?? DEFAULT_SYNC_INTERVAL_HOURS;
-    const effectiveHours = effectiveIntervalHours(intervalHours, consecutive_failures);
-    if (!isDueForSync(last_sync_at, effectiveHours)) continue;
+    if (!force) {
+      const intervalHours = getConnector(provider_key)?.syncIntervalHours ?? DEFAULT_SYNC_INTERVAL_HOURS;
+      const effectiveHours = effectiveIntervalHours(intervalHours, consecutive_failures);
+      if (!isDueForSync(last_sync_at, effectiveHours)) continue;
+    }
     await syncService(service_id);
+    synced++;
   }
+  return { synced, outboundDisabled: false };
 }
 
 // If the machine was asleep/off at month-end, the 23:50 job below never fired.
@@ -149,6 +159,15 @@ function startCrons() {
 
   startAlertCron();
   catchUpMissedSnapshot();
+
+  // Run once on every launch (in addition to the 6h tick above) so data that
+  // fell due while the app was closed syncs immediately instead of waiting
+  // up to 6h after reopening. isDueForSync/effectiveIntervalHours inside
+  // syncEnabledConnectors() still gate each connector individually, so this
+  // is a no-op for anything that already synced within its own cadence.
+  syncEnabledConnectors().catch(err => {
+    console.error('[levee] connector sync error:', err.message);
+  });
 }
 
 module.exports = { startCrons, takeSnapshot, syncEnabledConnectors, isDueForSync, effectiveIntervalHours, isBillingMonth };

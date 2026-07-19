@@ -5,9 +5,16 @@ const db = require('../db/database');
 const { list: listConnectors, get: getConnector } = require('../connectors/registry');
 const { setSecret, getSecret, deleteSecret } = require('../secrets');
 const { syncService, upsertMetrics, resolveConnectorSecrets } = require('../connectors/sync');
+const { syncEnabledConnectors } = require('../cron/snapshot');
 const { isValidId } = require('../middleware/validate');
 
 const router = Router();
+
+// Authoritative rate limit for POST /sync-all below — in-memory, resets on
+// restart (same lifetime as the per-launch token), which is fine since this
+// only throttles how often a user can force a bulk sync within one run.
+const SYNC_ALL_COOLDOWN_MS = 5 * 60 * 1000;
+let syncAllNextAllowedAt = 0;
 
 // GET /api/connectors/providers — registry metadata (no secrets, no fetch fns)
 router.get('/providers', (_req, res) => {
@@ -97,6 +104,40 @@ router.delete('/:serviceId', async (req, res) => {
     );
   }
 
+  res.json({ ok: true });
+});
+
+// POST /api/connectors/sync-all — forces every enabled connector to sync right
+// now, bypassing each connector's own interval (unlike sync-check below) — for
+// "I want to see live data right now". Gated by a single 5min cooldown shared
+// across every caller (not per-connector), since forcing on demand can hit a
+// metered endpoint (AWS Cost Explorer @ $0.01/request) that its own interval
+// exists specifically to cap.
+router.post('/sync-all', async (_req, res) => {
+  const now = Date.now();
+  if (now < syncAllNextAllowedAt) {
+    return res.status(429).json({
+      error: 'Sync all was just run — please wait before retrying.',
+      retryAfterMs: syncAllNextAllowedAt - now,
+    });
+  }
+
+  const result = await syncEnabledConnectors({ force: true });
+  if (result.outboundDisabled) {
+    return res.status(400).json({ error: 'Enable outbound connections in Settings to sync.' });
+  }
+
+  syncAllNextAllowedAt = now + SYNC_ALL_COOLDOWN_MS;
+  res.json({ ok: true, nextAllowedAt: syncAllNextAllowedAt, synced: result.synced });
+});
+
+// POST /api/connectors/sync-check — runs the same due-check the 6h cron uses,
+// triggered instead by the Electron main process on window focus (debounced
+// there to at most once every 20min). Reuses isDueForSync/last_sync_at, so it
+// never syncs a connector earlier than its own configured interval — it only
+// closes the gap between "became due" and the next scheduled cron tick.
+router.post('/sync-check', async (_req, res) => {
+  await syncEnabledConnectors();
   res.json({ ok: true });
 });
 
