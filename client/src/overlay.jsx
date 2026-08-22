@@ -243,7 +243,7 @@ function OverlayInner() {
           display: phase === 'minimized' ? 'flex' : 'none',
         }}
       >
-        <img src="/levee-overlay.png" alt="" className="object-contain transition-transform hover:scale-110 active:scale-95" style={{ width: ORB - 6, height: ORB - 6 }} />
+        <img src={`${import.meta.env.BASE_URL}levee-overlay.png`} alt="" className="object-contain transition-transform hover:scale-110 active:scale-95" style={{ width: ORB - 6, height: ORB - 6 }} />
       </button>
 
       {/* Panel — scales uniformly into / out of the anchored corner (where the FAB

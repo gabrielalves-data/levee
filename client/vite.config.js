@@ -36,6 +36,7 @@ function cspMetaPlugin() {
 
 export default defineConfig({
   root: __dirname,
+  base: './',
   plugins: [react(), cspMetaPlugin()],
   server: {
     host: '127.0.0.1',

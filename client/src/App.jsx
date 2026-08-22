@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Grid2X2, Settings } from 'lucide-react'
 import Overview from './pages/Overview'
 import Services from './pages/Services'
@@ -17,7 +17,7 @@ const NAV = [
   { to: '/settings', label: 'settings', Icon: Settings },
 ]
 
-// Declarative <BrowserRouter> ignores React Router's `viewTransition` nav option
+// Declarative <HashRouter> ignores React Router's `viewTransition` nav option
 // (it only works with data/framework routers), so we wrap the navigation in a
 // view transition ourselves — `flushSync` commits the route change before the
 // browser captures the "new" snapshot, exactly like the overlay morph.
@@ -43,7 +43,7 @@ function Sidebar() {
   return (
     <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
       <div className="px-4 py-4 border-b border-slate-800 flex items-center gap-3">
-        <img src="/levee-logo.png" alt="Levee" className="h-11 w-11 object-contain flex-shrink-0" />
+        <img src={`${import.meta.env.BASE_URL}levee-logo.png`} alt="Levee" className="h-11 w-11 object-contain flex-shrink-0" />
         <span className="font-mono text-base text-slate-200 tracking-tight">
           <span className="text-emerald-400">&gt;</span> levee
           <span className="ml-0.5 inline-block w-2 h-4 align-middle bg-emerald-400 animate-pulse" />
@@ -97,7 +97,7 @@ function NavigationListener() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <HashRouter>
         <NavigationListener />
         <div className="app-shell flex h-screen bg-slate-950 text-slate-200 overflow-hidden crt-scanlines">
           <Sidebar />
@@ -109,7 +109,7 @@ export default function App() {
             </Routes>
           </main>
         </div>
-      </BrowserRouter>
+      </HashRouter>
     </QueryClientProvider>
   )
 }
