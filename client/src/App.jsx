@@ -11,6 +11,21 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 })
 
+// Invalidates dashboard queries when the main process reports a completed
+// sync (cron tick, launch sync, focus sync-check, or manual "Sync now") —
+// otherwise an already-open, already-focused dashboard has no way to learn
+// that fresh data landed in the background.
+function SyncListener() {
+  useEffect(() => {
+    if (!window.levee?.onWidgetUpdate) return
+    return window.levee.onWidgetUpdate(() => {
+      queryClient.invalidateQueries({ queryKey: ['services'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+    })
+  }, [])
+  return null
+}
+
 const NAV = [
   { to: '/',         label: 'overview', Icon: LayoutDashboard },
   { to: '/services', label: 'services', Icon: Grid2X2 },
@@ -99,6 +114,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <HashRouter>
         <NavigationListener />
+        <SyncListener />
         <div className="app-shell flex h-screen bg-slate-950 text-slate-200 overflow-hidden crt-scanlines">
           <Sidebar />
           <main className="flex-1 overflow-y-auto" style={{ viewTransitionName: 'page' }}>

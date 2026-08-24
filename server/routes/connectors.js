@@ -136,8 +136,13 @@ router.post('/sync-all', async (_req, res) => {
 // there to at most once every 20min). Reuses isDueForSync/last_sync_at, so it
 // never syncs a connector earlier than its own configured interval — it only
 // closes the gap between "became due" and the next scheduled cron tick.
+// ignoreBackoff:true additionally skips the 24h failure-backoff floor (still
+// gated by each connector's own interval) — the user is actively looking at
+// the app, so a connector that was failing (e.g. an expired Claude Code
+// token) gets retried on its normal cadence instead of staying stuck for up
+// to a day after the user has already fixed the underlying problem.
 router.post('/sync-check', async (_req, res) => {
-  await syncEnabledConnectors();
+  await syncEnabledConnectors({ ignoreBackoff: true });
   res.json({ ok: true });
 });
 

@@ -7,7 +7,7 @@ const fs   = require('fs');
 let overlayWin = null;
 
 const PILL = 48;   // collapsed (minimized) overlay window size — kept in sync with overlay.jsx (ORB 36 + 2·GUTTER 6)
-const MARGIN = 12; // gap kept between the overlay (FAB or panel) and every screen edge
+const MARGIN = 0;  // gap kept between the overlay (FAB or panel) and every screen edge
 
 function boundsPath() {
   return path.join(app.getPath('home'), '.levee', 'overlay-bounds.json');

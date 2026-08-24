@@ -123,9 +123,11 @@ async function startServer() {
       // New metrics landed from any sync path (cron tick, launch sync, focus
       // sync-check, or a manual "Sync now") — reuse the same channel the
       // renderer already uses after editing a widget slot, so the overlay
-      // refetches immediately instead of waiting for its 30s poll.
+      // and the main dashboard refetch immediately instead of waiting on
+      // their own poll/focus/staleTime to happen to line up.
       const ov = getOverlay();
       if (ov && !ov.isDestroyed()) ov.webContents.send('widget-updated');
+      if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('widget-updated');
       return;
     }
     if (msg?.type !== 'secret-request') return;

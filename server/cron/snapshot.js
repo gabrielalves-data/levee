@@ -80,7 +80,16 @@ function takeSnapshot(year, month) {
 // sync-all route) is responsible for its own rate limiting, since forcing a
 // metered connector (e.g. AWS Cost Explorer @ $0.01/request) on demand has a
 // real cost the interval would otherwise cap.
-async function syncEnabledConnectors({ force = false } = {}) {
+//
+// ignoreBackoff=true (the focus-triggered sync-check) skips only the 24h
+// backoff floor, not the connector's own cadence — a connector stuck in the
+// backoff (e.g. claude_plan after its OAuth token expired) still gets
+// retried at its normal syncIntervalHours once the user is back looking at
+// the app, instead of staying frozen for up to 24h after the underlying
+// problem (e.g. an expired Claude Code session) is already fixed. The
+// passive 6h cron tick calls this with neither flag, so an unattended
+// broken connector — metered or not — stays capped at the 24h floor.
+async function syncEnabledConnectors({ force = false, ignoreBackoff = false } = {}) {
   const setting = db.prepare(
     `SELECT value FROM app_settings WHERE key = 'allow_outbound'`
   ).get();
@@ -102,7 +111,7 @@ async function syncEnabledConnectors({ force = false } = {}) {
   for (const { service_id, provider_key, consecutive_failures, last_sync_at } of rows) {
     if (!force) {
       const intervalHours = getConnector(provider_key)?.syncIntervalHours ?? DEFAULT_SYNC_INTERVAL_HOURS;
-      const effectiveHours = effectiveIntervalHours(intervalHours, consecutive_failures);
+      const effectiveHours = ignoreBackoff ? intervalHours : effectiveIntervalHours(intervalHours, consecutive_failures);
       if (!isDueForSync(last_sync_at, effectiveHours)) continue;
     }
     await syncService(service_id);
