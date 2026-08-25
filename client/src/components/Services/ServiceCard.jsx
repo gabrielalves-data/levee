@@ -6,6 +6,7 @@ import { useCatalog, useApplyCatalogPlan } from '../../hooks/useCatalog'
 import { useAllowOutbound, useUpsertConnector, useSyncConnector, useTestConnector, useAuditConnector, useDeleteConnector } from '../../hooks/useConnectors'
 import { useProviders } from '../../hooks/useProviders'
 import { formatCurrency } from '../../utils/currency'
+import { parseMetricDate, formatCountdown } from '../../utils/time'
 
 const CATEGORY_STYLES = {
   cloud:    'bg-blue-500/20 text-blue-300',
@@ -23,23 +24,6 @@ const CATEGORY_LABELS = {
   custom:   'Custom',
 }
 
-// Date metrics are all "next reset" timestamps — show the time remaining
-// ("in 5h", "in 3d") rather than a raw date. Falls back to the date once elapsed.
-function formatReset(date) {
-  const ms = date.getTime() - Date.now()
-  if (ms <= 0) return date.toLocaleDateString()
-  const mins = Math.round(ms / 60000)
-  if (mins < 60) return `in ${mins}m`
-  const hours = Math.round(mins / 60)
-  if (hours < 48) return `in ${hours}h`
-  return `in ${Math.round(hours / 24)}d`
-}
-
-function parseDateValue({ value_text, value_num }) {
-  const d = value_text ? new Date(value_text) : (value_num != null ? new Date(value_num * 1000) : null)
-  return d && !isNaN(d.getTime()) ? d : null
-}
-
 function formatValue(metric, serviceCurrency) {
   const { value_type, value_num, value_text, unit } = metric
   if (value_num == null && !value_text) return '—'
@@ -51,8 +35,8 @@ function formatValue(metric, serviceCurrency) {
     case 'percent':  return `${value_num.toFixed(1)}%`
     case 'number':   return `${value_num.toLocaleString()}${unit ? ' ' + unit : ''}`
     case 'date': {
-      const d = parseDateValue(metric)
-      return d ? formatReset(d) : (value_text ?? '—')
+      const d = parseMetricDate(metric)
+      return d ? formatCountdown(d) : (value_text ?? '—')
     }
     default:         return value_text ?? String(value_num)
   }
@@ -137,7 +121,7 @@ function MetricRow({ metric, service, prevBill, readOnly }) {
           {!editing && (
             <span
               className={`text-xs font-medium ${isEmpty ? 'text-slate-600' : 'text-slate-200'}`}
-              title={metric.value_type === 'date' ? (parseDateValue(metric)?.toLocaleString() ?? undefined) : undefined}
+              title={metric.value_type === 'date' ? (parseMetricDate(metric)?.toLocaleString() ?? undefined) : undefined}
             >
               {formatValue(metric, service.currency)}
             </span>

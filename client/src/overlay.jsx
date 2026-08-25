@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Minimize2 } from 'lucide-react'
 import { apiFetch } from './api'
-import { useRelativeTime } from './utils/time'
+import { useRelativeTime, parseMetricDate, formatCountdown } from './utils/time'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -24,6 +24,10 @@ const PILL = ORB + GUTTER * 2 // 48
 
 function formatValue(slot) {
   if (!slot.service_id) return '—'
+  if (slot.value_type === 'date') {
+    const d = parseMetricDate(slot)
+    return d ? formatCountdown(d) : (slot.value_text || '—')
+  }
   const v = slot.value_num
   if (v === null || v === undefined) return slot.value_text || '—'
   switch (slot.value_type) {

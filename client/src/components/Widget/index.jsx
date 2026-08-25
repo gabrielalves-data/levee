@@ -3,11 +3,16 @@ import { X } from 'lucide-react'
 import { useWidget, useSetWidgetSlot, useClearWidgetSlot } from '../../hooks/useWidget'
 import { useServices } from '../../hooks/useServices'
 import { useMetrics } from '../../hooks/useMetrics'
+import { parseMetricDate, formatCountdown } from '../../utils/time'
 
 const SEL = 'bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500 disabled:opacity-40'
 
 function formatPreview(metric) {
   if (!metric) return null
+  if (metric.value_type === 'date') {
+    const d = parseMetricDate(metric)
+    return d ? formatCountdown(d) : (metric.value_text || null)
+  }
   const v = metric.value_num
   if (v === null || v === undefined) return metric.value_text || null
   if (metric.value_type === 'currency') return `$${v.toFixed(2)}`
