@@ -1,301 +1,190 @@
-# Levee
+<h1 align="center">Levee</h1>
 
-Privacy-first, local-only desktop app for tracking developer costs — cloud, AI models,
-AI APIs, dev tools. No cloud sync, no accounts, no telemetry, zero outbound network calls
-by default. Supports both static catalog plans and live API-pulled metrics.
+<p align="center">
+  <strong>Track what your cloud, AI and developer tools actually cost you — entirely on your own machine.</strong>
+</p>
 
-## How this was built
+<p align="center">
+  No cloud sync. No accounts. No telemetry. Zero outbound network calls unless you switch them on.
+</p>
 
-Levee was **directed by me and implemented with heavy AI assistance**. I set the goals
-and constraints — the idea itself, making it fully local with no cloud or telemetry, and
-keeping secrets as protected as possible — and chose the overall direction. The specific
-techniques that satisfy those goals (loopback-only binding, per-launch token auth,
-OS-keychain secrets, DNS-rebinding defence, CTE-only SQL) were largely proposed by AI;
-my role was to evaluate, question, and approve each one, and to reject what didn't fit.
-I treat AI as a fast pair-programmer, not an autopilot: I own the decisions even where
-I didn't originate the mechanism. This reflects how I prefer to work — setting direction
-and reviewing rigorously rather than line-by-line authorship.
+<p align="center">
+  <img alt="status: active development" src="https://img.shields.io/badge/status-active%20development-orange">
+  <img alt="not feature complete" src="https://img.shields.io/badge/stability-not%20feature--complete-yellow">
+  <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
+</p>
 
-## Setup
+> **Status: active development — not yet feature-complete.**
+> Levee is a pre-1.0 side project, maintained by one person. Expect rough edges,
+> incomplete connectors, and breaking changes between versions. It has not been
+> independently security-audited. Read [Security model](#security-model) and
+> [Known limitations](#known-limitations) before trusting it with real API keys.
 
-```sh
-npm install                # installs deps + rebuilds native modules (better-sqlite3) for Electron's ABI
-cd server && npm install   # install server deps
-npm run dev                # starts server + client + electron concurrently
+---
+
+<!-- TODO: replace with a real screenshot of the dashboard + overlay -->
+<p align="center">
+  <img src="docs/screenshot.png" alt="Levee dashboard and floating overlay" width="800">
+  <br>
+  <em><strong>TODO</strong> — screenshot placeholder. Add <code>docs/screenshot.png</code>.</em>
+</p>
+
+---
+
+## What it does
+
+- **Tracks spend across cloud, AI APIs, AI plans and dev tools** in one place — AWS, Azure, Anthropic, OpenAI, DeepSeek, Cloudflare, Vercel, GitHub, Datadog, Sentry, Twilio and more than a dozen others, alongside services you enter by hand.
+- **Pulls real numbers from provider billing APIs** when you connect one, using a read-only credential you supply. Everything else can be tracked manually — no connector required.
+- **Shows a floating always-on-top overlay** with your current burn, toggled with a global hotkey (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd>) and hidden from screen shares by default.
+- **Keeps history locally** — daily snapshots, budget caps, and per-service alerts when you're pacing over budget.
+- **Stores everything in one SQLite file on your disk** that you can open, inspect, back up, or delete yourself.
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Desktop shell | Electron (tray, always-on-top overlay, global hotkey, launch-at-login) |
+| Frontend | React + Vite, Tailwind CSS, Recharts, React Query, lucide-react |
+| Backend | Express — bound to `127.0.0.1` only — with helmet and node-cron |
+| Storage | SQLite via `better-sqlite3-multiple-ciphers` |
+
+The Express server runs as an Electron `utilityProcess`, so a packaged build needs no system Node install.
+
+## Where your data lives
+
+This is the whole point of the project, so here is exactly where everything goes.
+All of it is under `~/.levee/` — `C:\Users\<you>\.levee\` on Windows.
+
+| File | Contains | Protection |
+|---|---|---|
+| `~/.levee/levee.db` | All cost data, services, snapshots, settings | File mode `0600`, directory `0700` (POSIX). Optional at-rest encryption — see below |
+| `~/.levee/secrets.json` | The database encryption key, if you enable encryption | Encrypted with Electron `safeStorage` (OS-backed: DPAPI / Keychain / libsecret). Never plaintext |
+| `~/.levee/config.json` | Window and overlay preferences | Mode `0600`. No credentials |
+| `~/.levee/overlay-bounds.json` | Overlay position on screen | No credentials |
+| **OS credential store** | Your connector API keys | Windows Credential Manager / macOS Keychain / Linux libsecret, via `keytar`. **Never written to the database, logs, or exports** |
+
+**Verify it yourself:**
+
+```bash
+ls -la ~/.levee/                       # everything Levee persists
+sqlite3 ~/.levee/levee.db .tables      # inspect the schema (unencrypted DBs)
+sqlite3 ~/.levee/levee.db "SELECT * FROM app_settings;"
 ```
 
-> The root `postinstall` runs `electron-rebuild` so the native modules match Electron's
-> Node ABI. The packaged app runs the server under Electron's bundled Node (via
-> `utilityProcess`), so **no system Node install is required** on the user's machine.
+There is no other location. Deleting `~/.levee/` and removing the `levee` entries
+from your OS credential store removes every trace of your data.
 
-## Building a distributable
+### Outbound network
 
-[electron-builder](https://www.electron.build/) packages the app per platform. Output lands
-in `release/`.
+Levee makes **no network calls by default.** Outbound traffic is gated behind a
+setting that ships as `false` ([`schema.sql`](server/db/schema.sql)):
 
-```sh
-npm run pack       # unpacked dir build — fast, for local smoke-testing (no installer)
-npm run dist       # build installers for the current OS (no publish)
-npm run release    # build + publish to GitHub Releases (needs GH_TOKEN with repo scope)
+```sql
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('allow_outbound', 'false');
 ```
 
-| Platform | Targets |
-|----------|---------|
-| Windows  | NSIS installer, portable `.exe` |
-| macOS    | `.dmg` (developer-tools category) |
-| Linux    | AppImage, `.deb` |
+Until you enable **Settings → Privacy → Allow outbound connections**, every
+connector request throws before any socket opens. Once enabled, a connector may
+only reach hosts on its own hardcoded allowlist, and only the specific
+`(method, path)` endpoints it declares — enforced centrally in
+[`server/connectors/http.js`](server/connectors/http.js), with redirects refused
+so the allowlist holds on every hop.
 
-App id `com.gabriel.levee`; icon from `build/icon.png`. The publish target is the
-`gabrielalves-data/levee` GitHub repo.
+The **only** non-connector destination is GitHub Releases, reached solely when
+you click *Check for updates* in Settings. There is no check on launch.
 
-## Updates
+**There is no telemetry, no analytics, and no crash reporting.** No usage data,
+error report, or ping ever leaves your machine. (Sentry appears in the connector
+list only as a service whose *bill* Levee can read — not as error reporting.)
 
-Opt-in and manual — Levee **never** checks for updates on its own. Settings → App →
-**Check for updates** is the only trigger; it reads the public GitHub Releases feed, then
-the user accepts the download and restarts to install. No update token is bundled in the
-app (the publish token is used only at `npm run release` upload time). In dev (unpackaged)
-the check reports that updates are only available in the installed app.
+## Install / run from source
 
-## Architecture
+**Requirements:** Node.js 20+, npm, and a toolchain able to build native modules
+(Visual Studio Build Tools on Windows, Xcode CLT on macOS, `build-essential` on Linux).
 
-| Layer      | Tech                               | Notes                          |
-|------------|------------------------------------|--------------------------------|
-| Frontend   | React + Vite, Tailwind, Recharts   | Main window + overlay widget   |
-| Backend    | Express.js (loopback only)         | REST API on 127.0.0.1:3001     |
-| Desktop    | Electron                           | Tray, hotkey, overlay          |
-| DB         | better-sqlite3                     | ~/.devcost/devcost.db (0600)   |
-| Secrets    | Electron `safeStorage`             | OS-encrypted, never in DB      |
-| Connectors | Per-provider modules               | Live API pull, secrets in OS keychain |
+```bash
+git clone https://github.com/gabrielalves-data/levee.git
+cd levee
+npm install          # postinstall rebuilds native modules against Electron's ABI
+npm run dev          # Vite dev server + Electron
+```
 
-## Data retrieval modes
+`npm run dev` starts the Vite client and Electron together; Electron spawns the
+Express server itself on port 3001 in development.
 
-Each tracked service uses one of three connector types:
+**Build a distributable:**
 
-| Mode      | How it works |
-|-----------|-------------|
-| `manual`  | Costs entered by hand — no API calls |
-| `catalog` | Pick a fixed plan from `server/catalog/plans.json`; metrics set automatically |
-| `api`     | Live pull via a registered connector; secrets stored in OS keychain |
+```bash
+npm run build        # bundle the renderer
+npm run pack         # unpacked build, for local testing
+npm run dist         # full installer for your platform
+```
 
-### Catalog plans
+**Tests:**
 
-Catalog covers fixed-price subscriptions. Apply a plan via `POST /api/catalog/apply`
-and Levee sets the monthly bill, plan label, and next reset date automatically.
+```bash
+npm test             # renderer unit tests (vitest) — 21 tests
+```
 
-Catalog providers cover AI subscriptions (Claude, ChatGPT, Gemini, Perplexity, Midjourney,
-Mistral Le Chat), AI coding assistants (Cursor, Windsurf, Tabnine, Cody, Replit, Raycast,
-Warp, JetBrains AI, v0), hosting/DB flat tiers (Supabase, Netlify, Neon), and dev-tool /
-SaaS subscriptions (GitHub, GitLab, JetBrains, Notion, Slack, Figma, Postman, 1Password,
-Tailscale, ngrok, GitHub Copilot). See [`server/catalog/plans.json`](server/catalog/plans.json)
-for the full list and prices.
-
-### API connectors
-
-Live connectors pull real metrics from provider APIs on demand and on the hourly cron.
-Each connector declares the exact hostnames it may contact — the HTTP client rejects
-all other outbound requests.
-
-| Connector key     | Provider                  | Category | Auth type       |
-|-------------------|---------------------------|----------|-----------------|
-| `anthropic_api`   | Anthropic API             | ai_api   | apiKey          |
-| `openai_api`      | OpenAI API                | ai_api   | apiKey          |
-| `openrouter`      | OpenRouter                | ai_api   | apiKey          |
-| `deepseek`        | DeepSeek                  | ai_api   | apiKey          |
-| `elevenlabs`      | ElevenLabs                | ai_api   | apiKey          |
-| `claude_plan`     | Claude Pro/Max plan usage | ai_model | localOAuth (reads Claude Code's token) |
-| `aws_cost`        | AWS Cost Explorer         | cloud    | awsKeyPair      |
-| `vercel`          | Vercel                    | cloud    | apiKey          |
-| `railway`         | Railway                   | cloud    | apiKey          |
-| `cloudflare`      | Cloudflare                | cloud    | apiKey          |
-| `planetscale`     | PlanetScale               | cloud    | apiKey          |
-| `digitalocean`    | DigitalOcean              | cloud    | apiKey          |
-| `azure`           | Azure                     | cloud    | oauthClientCredentials |
-| `mongodb_atlas`   | MongoDB Atlas             | cloud    | digest          |
-| `vultr`           | Vultr                     | cloud    | apiKey          |
-| `linode`          | Linode / Akamai           | cloud    | apiKey          |
-| `cloudinary`      | Cloudinary                | cloud    | basicAuth       |
-| `fastly`          | Fastly                    | cloud    | apiKey          |
-| `bunny`           | Bunny.net                 | cloud    | apiKey          |
-| `github_copilot`  | GitHub Copilot (org)      | tool     | apiKey          |
-| `github_actions`  | GitHub Actions            | tool     | apiKey          |
-| `linear`          | Linear                    | tool     | apiKey          |
-| `sentry`          | Sentry                    | tool     | apiKey          |
-| `twilio`          | Twilio                    | tool     | apiKey          |
-| `datadog`         | Datadog                   | tool     | apiKeyPair      |
-| `sendgrid`        | SendGrid                  | tool     | apiKey          |
+> Server-side tests (`npm run test:connectors`) currently fail to run after a
+> normal install: `postinstall` builds `better-sqlite3-multiple-ciphers` against
+> Electron's ABI, which plain `node --test` cannot load
+> (`ERR_DLOPEN_FAILED`). Tracked as a known limitation below.
 
 ## Security model
 
-- Express binds to `127.0.0.1` only; all requests require a per-launch random token in `x-devcost-token`
-- DNS-rebinding protection: non-loopback `Host` rejected; **any** `Origin` header rejected
-- Electron: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, strict CSP
-- DB file and directory have restrictive OS permissions (0600 / 0700)
-- API secrets stored via Electron `safeStorage` — never written to SQLite or exports
-- Connector HTTP client enforces a per-connector hostname allowlist; no other outbound calls permitted
-- `localOAuth` connectors read a token another app already stores locally (explicit per-service consent required); the token is held in memory only during sync and never persisted
-- The auto-updater is the only outbound path outside a connector, and it fires **only** when the user clicks "Check for updates" — no automatic/background checks; no token bundled in the app
+Levee's threat model is **a local-only app holding third-party billing credentials
+on a single-user machine.** Here is what that does and does not cover.
 
-## Global hotkey
+### What is protected
 
-`Ctrl+Shift+G` (Windows/Linux) / `Cmd+Shift+G` (macOS) toggles the overlay widget.
+- **The local API is not reachable from the network.** Express binds `127.0.0.1` explicitly — never `0.0.0.0` — and rejects any request whose `Host` header is not loopback.
+- **Every API request needs a per-launch token.** 32 random bytes generated at startup, held in memory only, never written to disk. It is delivered to the server over an Electron `utilityProcess` message channel rather than an environment variable, so it never appears in `/proc/<pid>/environ`. Comparison is constant-time over SHA-256 digests.
+- **DNS-rebinding defence.** Browser `Origin` headers that aren't loopback are rejected outright.
+- **Credentials never touch the database.** Connector keys live in the OS credential store. Backup exports additionally refuse any config key matching `/secret|key|token|password|credential/i`, so a misconfigured connector cannot leak one into an export file.
+- **Nothing sensitive reaches logs.** Error paths log only `err.message`; request headers and bodies are never logged, and connector errors are re-wrapped to strip content.
+- **Renderer is sandboxed.** Both windows run `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. The preload exposes a fixed, explicit list of methods over `contextBridge` — no raw `ipcRenderer`, no `require`. Navigation is restricted by `will-navigate`, and renderer-opened windows are denied outright.
+- **Strict CSP, no `unsafe-eval`.** Packaged builds run `script-src 'self'` with `connect-src` pinned to the server's actual port. No remote content is ever loaded.
+- **Packaged binaries have Electron fuses flipped** — `RunAsNode` disabled, `OnlyLoadAppFromAsar` and embedded ASAR integrity validation enabled ([`build/afterPack.js`](build/afterPack.js)).
+- **Optional database encryption at rest,** with the key held in `safeStorage`, deliberately stored outside the database it unlocks.
+- **Overlay is excluded from screen capture** by default, so billing figures don't leak into screen shares or recordings.
+- **Least-privilege guidance per connector.** Every connector documents the narrowest credential scope that works, and says so plainly when a provider offers no read-only option. The AWS connector ships an opt-in audit that probes whether the key you supplied is over-scoped.
 
----
+### What is *not* protected
 
-## API routes
+- **An attacker running code as your OS user.** They can read the launch token from memory, call the local API, and ask the OS credential store for your keys — exactly as Levee itself does. Levee does not defend against this and cannot.
+- **File modes are POSIX-only.** `0600`/`0700` are enforced via `chmod`, which is largely a no-op on Windows; there, `~/.levee/` inherits your user profile's ACL instead.
+- **Release binaries are unsigned.** See below.
+- **Credential scope is your responsibility.** Levee tells you the minimum scope per provider but cannot enforce it. Some providers — Anthropic admin keys, Bunny, Cloudinary, DeepSeek, Linear, Railway — offer no read-only billing scope at all; for those, use a key dedicated to Levee and nothing else.
+- **No independent audit.** One person wrote this. Review the code before trusting it with production credentials.
 
-### Services
+Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/services` | List active services (`?all=1` includes inactive) |
-| GET | `/api/services/:id` | Single service |
-| POST | `/api/services` | Create service |
-| PATCH | `/api/services/:id` | Update fields |
-| DELETE | `/api/services/:id` | Soft-archive (sets active=0) |
+## Known limitations
 
-### Metrics
+These are known, accepted, and tracked as post-release work:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/metrics/:serviceId` | All metrics for a service |
-| PUT | `/api/metrics/:serviceId/:metricKey` | Upsert a metric value |
-| DELETE | `/api/metrics/:serviceId/:metricKey` | Remove a metric |
+| Limitation | Impact |
+|---|---|
+| **Release binaries are not code-signed or notarized** | Windows SmartScreen and macOS Gatekeeper will warn on install. Requires paid certificates |
+| **`keytar` is archived and unmaintained** | Still the store for connector credentials. It does not leak plaintext — a build failure makes it throw, never fall back to disk — but it should migrate to `safeStorage`, which the DB key already uses |
+| **Two separate secret stores** | Connector keys use `keytar`; the DB encryption key uses `safeStorage`. Working but inconsistent, and the `parentPort` secret proxy in `electron/main.js` is currently unused |
+| **Server test suite cannot run under plain Node** | Native modules are built for Electron's ABI; `npm run test:connectors` fails with `ERR_DLOPEN_FAILED`. Needs an Electron test runner or a dual-ABI setup |
+| **Build-time dependency CVEs** | `electron-builder`'s tree carries high/critical advisories (`tar`, `node-gyp`). Build-time only — not shipped in the app. Fixing needs a major-version bump |
+| **File permissions are weaker on Windows** | `chmod 0600` does not meaningfully restrict access there |
+| **Renderer bundle is large** | ~843 kB main chunk, no code splitting yet |
+| **Connector coverage is uneven** | Some providers expose no usable billing API and remain manual-entry only |
 
-### Widget
+Runtime dependencies currently report **0 vulnerabilities** (`npm audit --omit=dev`).
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/widget` | All widget slots with joined data |
-| PUT | `/api/widget/:slotIndex` | Assign/update a slot |
-| DELETE | `/api/widget/:slotIndex` | Clear a slot |
+## Contributing
 
-### Catalog
+Issues and pull requests are welcome, but please open an issue before starting
+anything substantial — this is a side project and I'd rather not waste your time
+on a direction I won't merge. Do not report security issues publicly; use
+[SECURITY.md](SECURITY.md) instead.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/catalog` | Full plan catalog |
-| POST | `/api/catalog/apply` | Apply a catalog plan to a service |
+## License
 
-### Connectors
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/connectors/providers` | List registered connector metadata |
-| PUT | `/api/connectors/:serviceId` | Configure connector + store secret(s) in keychain |
-| DELETE | `/api/connectors/:serviceId` | Disable connector + remove secret(s) from keychain |
-| POST | `/api/connectors/:serviceId/sync` | Trigger a manual sync |
-
-### Snapshots
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/snapshots` | List cost snapshots (monthly rollups) |
-
-### Settings
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/settings/:key` | Read an app setting (e.g. `allow_outbound`) |
-| PUT | `/api/settings/:key` | Write an app setting (secrets blocked by key pattern) |
-
-### Backup
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/backup/export` | Export all data to JSON (secrets excluded) |
-| POST | `/api/backup/import` | Import a previously exported JSON backup |
-
-### Encryption
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/encryption/status` | Check whether at-rest DB encryption is active |
-| POST | `/api/encryption/toggle` | Enable or disable DB encryption (key in OS keychain) |
-
----
-
-## Security guard verification
-
-Start the server and note the token printed to stdout:
-
-```
-[devcost] LAUNCH_TOKEN=<TOKEN>
-```
-
-Set it as a shell variable for the snippets below:
-
-```sh
-TOKEN=<paste token here>
-```
-
-### ✓ Valid request — should return 200
-
-```sh
-curl -s http://127.0.0.1:3001/api/services \
-  -H "x-devcost-token: $TOKEN"
-```
-
-### ✗ Missing token — should return 401
-
-```sh
-curl -s http://127.0.0.1:3001/api/services
-# {"error":"Unauthorized"}
-```
-
-### ✗ Wrong token — should return 401
-
-```sh
-curl -s http://127.0.0.1:3001/api/services \
-  -H "x-devcost-token: wrong"
-# {"error":"Unauthorized"}
-```
-
-### ✗ Origin header present — should return 403
-
-```sh
-curl -s http://127.0.0.1:3001/api/services \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Origin: http://127.0.0.1:5173"
-# {"error":"Forbidden: origin header present"}
-```
-
-### ✗ Non-loopback Host — should return 403
-
-```sh
-curl -s http://127.0.0.1:3001/api/services \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Host: evil.example.com"
-# {"error":"Forbidden: non-loopback host"}
-```
-
-### Sample write operations
-
-```sh
-# Apply a catalog plan (Claude Pro = $20/month)
-curl -s -X POST http://127.0.0.1:3001/api/catalog/apply \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"serviceId":1,"providerKey":"claude","planKey":"Pro"}'
-
-# Configure an API connector (e.g. Anthropic)
-curl -s -X PUT http://127.0.0.1:3001/api/connectors/8 \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"providerKey":"anthropic_api","secret":"sk-ant-..."}'
-
-# Trigger a manual sync
-curl -s -X POST http://127.0.0.1:3001/api/connectors/8/sync \
-  -H "x-devcost-token: $TOKEN"
-
-# Create a custom service
-curl -s -X POST http://127.0.0.1:3001/api/services \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"My VPS","provider":"Hetzner","category":"cloud","cost_model":"flat","monthly_cost":5.99}'
-
-# Assign widget slot 0 to a metric
-curl -s -X PUT http://127.0.0.1:3001/api/widget/0 \
-  -H "x-devcost-token: $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"service_id":8,"metric_key":"monthly_bill"}'
-```
+[MIT](LICENSE) © 2026 Gabriel Alves

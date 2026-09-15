@@ -313,7 +313,12 @@ ipcMain.handle('get-port',  () => PORT);
 ipcMain.on('open-dashboard', (_e, serviceId) => {
   mainWin?.show();
   mainWin?.focus();
-  mainWin?.webContents.send('navigate', serviceId ? `/services?focus=${serviceId}` : '/services');
+  // Service ids are INTEGER PRIMARY KEY (see server/db/schema.sql) — coerce
+  // rather than trust the renderer, so nothing arbitrary can be spliced into
+  // the route string that main sends back to the renderer's router.
+  const id = Number.isInteger(serviceId) ? serviceId : Number.parseInt(serviceId, 10);
+  const route = Number.isInteger(id) && id > 0 ? `/services?focus=${id}` : '/services';
+  mainWin?.webContents.send('navigate', route);
 });
 
 ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);

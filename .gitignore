@@ -33,6 +33,14 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Levee runtime state — never belongs in the repo
+.levee/
+secrets.json
+overlay-bounds.json
 
 # Logs
 logs/
@@ -45,13 +53,16 @@ electron-debug.log
 Thumbs.db
 desktop.ini
 
-# Editor
+# Editor / tooling
 .vscode/
 .idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+.claude/
+*.swp
+*~
 
 # Vite
 .vite/
@@ -68,6 +79,15 @@ coverage/
 *.tsbuildinfo
 .cache/
 
-# Notes
+# Private working notes — docs/ is ignored wholesale so planning material
+# (notes.txt, PROJECT-NOTES.md, levee-ssot.md) can never be published by
+# accident. Public docs assets are opted back in explicitly, one by one.
 notes.txt
-docs/
+# Ignore docs/ CONTENTS rather than the directory itself — git cannot
+# re-include a file whose parent directory is excluded, so `docs/` + a
+# negation would silently keep the screenshot out of the repo.
+docs/*
+!docs/*.png
+
+# Local AI-assistant instructions — maintainer-only, not part of the project
+CLAUDE.md

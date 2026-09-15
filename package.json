@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "Privacy-first local developer cost tracker",
+  "license": "MIT",
+  "author": "Gabriel Alves (https://github.com/gabrielalves-data)",
+  "homepage": "https://github.com/gabrielalves-data/levee",
+  "bugs": {
+    "url": "https://github.com/gabrielalves-data/levee/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/gabrielalves-data/levee.git"

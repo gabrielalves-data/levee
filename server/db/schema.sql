@@ -1,4 +1,4 @@
--- DevCost schema. CTEs preferred everywhere; no subqueries.
+-- Levee schema. CTEs preferred everywhere; no subqueries.
 
 CREATE TABLE IF NOT EXISTS services (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
