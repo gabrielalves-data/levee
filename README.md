@@ -28,15 +28,6 @@
 
 ---
 
-<!-- TODO: replace with a real screenshot of the dashboard + overlay -->
-<p align="center">
-  <img src="docs/screenshot.png" alt="Levee dashboard and floating overlay" width="800">
-  <br>
-  <em><strong>TODO</strong> — screenshot placeholder. Add <code>docs/screenshot.png</code>.</em>
-</p>
-
----
-
 ## What it does
 
 - **Tracks spend across cloud, AI APIs, AI plans and dev tools** in one place — AWS, Azure, Anthropic, OpenAI, DeepSeek, Cloudflare, Vercel, GitHub, Datadog, Sentry, Twilio and more than a dozen others, alongside services you enter by hand.
