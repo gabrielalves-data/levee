@@ -228,9 +228,9 @@ requests, connectors first.
 | 💡 **Feature ideas** | An issue, before writing any code |
 | 🔒 **Security issues** | **Never** in a public issue — see [SECURITY.md](SECURITY.md) |
 
-**Contact:** reach me through my GitHub profile,
-[@gabrielalves-data](https://github.com/gabrielalves-data), which lists my email —
-or just open an issue, which I'll see faster.
+**Contact:** for anything that isn't an issue, reach me through my site —
+[profile.gabrieldaes.com](https://profile.gabrieldaes.com/), which lists my email.
+For anything about Levee itself, an issue will get to me faster.
 
 ## License
 
