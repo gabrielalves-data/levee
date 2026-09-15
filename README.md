@@ -234,4 +234,4 @@ For anything about Levee itself, an issue will get to me faster.
 
 ## License
 
-[MIT](LICENSE) © 2026 Gabriel Alves
+[MIT](LICENSE) © 2026 Gabriel Daes
