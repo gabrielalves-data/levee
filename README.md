@@ -15,11 +15,16 @@
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
 </p>
 
-> **Status: active development — not yet feature-complete.**
-> Levee is a pre-1.0 side project, maintained by one person. Expect rough edges,
-> incomplete connectors, and breaking changes between versions. It has not been
-> independently security-audited. Read [Security model](#security-model) and
-> [Known limitations](#known-limitations) before trusting it with real API keys.
+> **Status: active development — not yet feature-complete, and under constant change.**
+> Levee is a pre-1.0 side project, maintained by one person. Expect rough edges and
+> breaking changes between versions. It has not been independently security-audited.
+> Read [Security model](#security-model) and [Known limitations](#known-limitations)
+> before trusting it with real API keys.
+>
+> **Connector maturity matters more than the version number** — see
+> [Connector status](#connector-status) below. Only the Claude plan connector has been
+> manually verified against a real account. Every other connector is covered by
+> automated tests but has **not** been confirmed to return correct live numbers.
 
 ---
 
@@ -39,6 +44,26 @@
 - **Shows a floating always-on-top overlay** with your current burn, toggled with a global hotkey (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd>) and hidden from screen shares by default.
 - **Keeps history locally** — daily snapshots, budget caps, and per-service alerts when you're pacing over budget.
 - **Stores everything in one SQLite file on your disk** that you can open, inspect, back up, or delete yourself.
+
+## Connector status
+
+Levee ships ~25 provider connectors. They are **not** equally trustworthy yet, and the
+difference is about verification, not code quality.
+
+| Tier | Connectors | What this means |
+|---|---|---|
+| ✅ **Manually verified** | **Claude / Anthropic plan usage** | Run against a real account. Confirmed to authenticate, fetch, and report numbers that match what the provider shows. |
+| ⚠️ **Tested, not verified live** | Everything else — AWS, Azure, OpenAI, Cloudflare, Vercel, GitHub, Datadog, Sentry, DigitalOcean, Linode, Twilio, SendGrid, Railway, Vultr, Fastly, Bunny, Cloudinary, DeepSeek, ElevenLabs, Linear, MongoDB Atlas, OpenRouter, PlanetScale and the rest | Covered by automated tests for request shape, auth headers, response parsing, error handling and the outbound allowlist — **but never pointed at a live account.** They may fail to connect, silently return nothing, or report a figure that doesn't match your real bill. |
+
+Concretely, for a ⚠️ connector the tests prove *"given this API response, the parser
+produces this number."* They do **not** prove the endpoint is still correct, that the
+credential scope is sufficient, or that the provider hasn't changed its billing schema.
+
+**Treat ⚠️ connector output as unconfirmed until you've checked it against your provider's
+own billing page.** If a number looks wrong, it may well be — please
+[open an issue](https://github.com/gabrielalves-data/levee/issues) and say which provider.
+
+Manual entry is unaffected by any of this and works for every service.
 
 ## Stack
 
@@ -175,15 +200,37 @@ These are known, accepted, and tracked as post-release work:
 | **File permissions are weaker on Windows** | `chmod 0600` does not meaningfully restrict access there |
 | **Renderer bundle is large** | ~843 kB main chunk, no code splitting yet |
 | **Connector coverage is uneven** | Some providers expose no usable billing API and remain manual-entry only |
+| **Only one connector is verified against a live account** | The Claude plan connector. All others are tested but unconfirmed in the real world — see [Connector status](#connector-status) |
 
 Runtime dependencies currently report **0 vulnerabilities** (`npm audit --omit=dev`).
 
-## Contributing
+## Contributing & contact
 
-Issues and pull requests are welcome, but please open an issue before starting
-anything substantial — this is a side project and I'd rather not waste your time
-on a direction I won't merge. Do not report security issues publicly; use
-[SECURITY.md](SECURITY.md) instead.
+**Not accepting code contributions yet** — and that's a deliberate, temporary call, not
+a lack of interest.
+
+Levee handles third-party billing credentials, has no CI, and its server test suite
+can't even run after a normal install (see [Known limitations](#known-limitations)).
+Merging outside code under those conditions would mean reviewing security-sensitive
+changes by hand with no automated gate, and asking contributors to work without being
+able to validate their own changes. That's not a fair deal for either side. The
+architecture is also still moving — the two secret stores are being consolidated.
+
+Once CI is in place and the server tests run out of the box, this opens up to pull
+requests, connectors first.
+
+**What genuinely helps right now:**
+
+| | |
+|---|---|
+| 🐛 **Bug reports** | [Open an issue](https://github.com/gabrielalves-data/levee/issues) |
+| 📊 **Connector verification** | The single most useful thing. If you have an account with a ⚠️ provider, connect it and tell me whether the number matches your real bill — including when it doesn't. That's the gap I can't close alone; I don't have accounts with 25 providers |
+| 💡 **Feature ideas** | An issue, before writing any code |
+| 🔒 **Security issues** | **Never** in a public issue — see [SECURITY.md](SECURITY.md) |
+
+**Contact:** reach me through my GitHub profile,
+[@gabrielalves-data](https://github.com/gabrielalves-data), which lists my email —
+or just open an issue, which I'll see faster.
 
 ## License
 
