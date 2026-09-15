@@ -42,6 +42,10 @@ __pycache__/
 secrets.json
 overlay-bounds.json
 
+# Landing-page screenshots written by scripts/capture.js — copied into the
+# levee-site repo, never kept here. Anchored so it can't match a source dir.
+/assets/
+
 # Logs
 logs/
 *.log
