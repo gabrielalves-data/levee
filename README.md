@@ -141,12 +141,14 @@ npm run dist         # full installer for your platform
 
 ```bash
 npm test             # renderer unit tests (vitest) — 21 tests
+npm run test:server  # server tests (node:test) — 238 tests
 ```
 
-> Server-side tests (`npm run test:connectors`) currently fail to run after a
-> normal install: `postinstall` builds `better-sqlite3-multiple-ciphers` against
-> Electron's ABI, which plain `node --test` cannot load
-> (`ERR_DLOPEN_FAILED`). Tracked as a known limitation below.
+> `postinstall` builds `better-sqlite3-multiple-ciphers` against Electron's ABI,
+> which plain `node --test` cannot load (`ERR_DLOPEN_FAILED`). The server suite
+> therefore runs through Electron's Node-compatible mode
+> (`ELECTRON_RUN_AS_NODE=1 electron --test`), so it loads the native module
+> against the ABI it was actually built for.
 
 ## Security model
 
@@ -186,7 +188,6 @@ These are known, accepted, and tracked as post-release work:
 | **Release binaries are not code-signed or notarized** | Windows SmartScreen and macOS Gatekeeper will warn on install. Requires paid certificates |
 | **`keytar` is archived and unmaintained** | Still the store for connector credentials. It does not leak plaintext — a build failure makes it throw, never fall back to disk — but it should migrate to `safeStorage`, which the DB key already uses |
 | **Two separate secret stores** | Connector keys use `keytar`; the DB encryption key uses `safeStorage`. Working but inconsistent, and the `parentPort` secret proxy in `electron/main.js` is currently unused |
-| **Server test suite cannot run under plain Node** | Native modules are built for Electron's ABI; `npm run test:connectors` fails with `ERR_DLOPEN_FAILED`. Needs an Electron test runner or a dual-ABI setup |
 | **Build-time dependency CVEs** | `electron-builder`'s tree carries high/critical advisories (`tar`, `node-gyp`). Build-time only — not shipped in the app. Fixing needs a major-version bump |
 | **File permissions are weaker on Windows** | `chmod 0600` does not meaningfully restrict access there |
 | **Renderer bundle is large** | ~843 kB main chunk, no code splitting yet |
